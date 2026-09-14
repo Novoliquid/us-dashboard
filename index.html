@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Market Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb; --card: #ffffff; --line: #e6e5e1; --line-2: #f0efec;
+    --text: #0b0b0b; --text-2: #52514e; --text-3: #8a8985;
+    --up: #e34948; --down: #2a78d6; --flat: #8a8985;
+    --up-bg: rgba(227,73,72,.10); --down-bg: rgba(42,120,214,.10);
+    --badge: #eda100;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #222220; --line: #383835; --line-2: #2c2c2a;
+      --text: #ffffff; --text-2: #c3c2b7; --text-3: #8a8985;
+      --up: #e66767; --down: #3987e5;
+      --up-bg: rgba(230,103,103,.14); --down-bg: rgba(57,135,229,.14);
+      --badge: #c98500;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--text);
+         font: 14px/1.45 -apple-system, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif;
+         font-variant-numeric: tabular-nums; }
+  header { padding: 20px 20px 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .meta { color: var(--text-2); font-size: 13px; }
+  .stale { background: var(--badge); color: #000; font-weight: 600; padding: 1px 8px; border-radius: 4px; font-size: 12px; }
+  main { padding: 0 20px 40px; max-width: 1400px; margin: 0 auto; }
+
+  /* macro board */
+  .macro { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 12px 0 28px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin: 0 0 6px; font-weight: 600; }
+  .row { display: grid; grid-template-columns: minmax(96px,1fr) auto auto auto; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line-2); align-items: baseline; }
+  .row:first-of-type { border-top: 0; }
+  .row .n { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .n small { color: var(--text-3); font-weight: 400; margin-left: 5px; font-size: 10px; }
+  .row .v { text-align: right; min-width: 56px; }
+  .chg { text-align: right; min-width: 58px; padding: 0 5px; border-radius: 4px; font-weight: 500; }
+  .up { color: var(--up); background: var(--up-bg); }
+  .down { color: var(--down); background: var(--down-bg); }
+  .flat { color: var(--flat); }
+  .hdr { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; color: var(--text-3); font-size: 11px; padding-bottom: 4px; }
+  .hdr span:nth-child(n+2) { text-align: right; min-width: 58px; }
+  .hdr span:nth-child(2) { min-width: 56px; }
+
+  /* sectors */
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
+  .tools h2 { font-size: 16px; margin: 0; flex: 1 1 auto; }
+  .tools input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); width: 220px; font: inherit; }
+  .tools button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text-2); cursor: pointer; font: inherit; font-size: 12px; }
+  details.sector { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
+  details.sector summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px; align-items: baseline; }
+  details.sector summary::-webkit-details-marker { display: none; }
+  details.sector summary .n { font-weight: 600; font-size: 15px; }
+  details.sector summary .n small { color: var(--text-3); font-weight: 400; margin-left: 8px; }
+  details.sector summary .lbl { color: var(--text-3); font-size: 11px; margin-right: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 12px; text-align: right; border-top: 1px solid var(--line-2); white-space: nowrap; }
+  th { color: var(--text-3); font-weight: 500; font-size: 11px; cursor: pointer; user-select: none; }
+  th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  td:first-child { font-weight: 600; }
+  td:nth-child(2) { color: var(--text-2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  td .chg { display: inline-block; }
+  tr.hide { display: none; }
+  footer { color: var(--text-3); font-size: 12px; padding: 20px; border-top: 1px solid var(--line); }
+  @media (max-width: 640px) {
+    header, main { padding-left: 12px; padding-right: 12px; }
+    td:nth-child(2) { max-width: 120px; }
+    th, td { padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>US Market Dashboard</h1>
+  <span class="meta" id="meta">loading…</span>
+  <span class="stale" id="stale" hidden>STALE</span>
+</header>
+<main>
+  <section class="macro" id="macro"></section>
+  <div class="tools">
+    <h2>S&amp;P 500 by Sector <small id="cnt" style="color:var(--text-3);font-weight:400"></small></h2>
+    <input id="q" type="search" placeholder="티커 / 회사명 검색" autocomplete="off">
+    <button id="expand">모두 펼치기</button>
+    <button id="collapse">모두 접기</button>
+  </div>
+  <section id="sectors"></section>
+</main>
+<footer>
+  종가 = 직전 완료 거래일 · 당일 = 전일 대비 % (채권은 bp) · 1M = 달력 1개월 전 직전 거래일 대비 % (채권은 bp) ·
+  섹터 헤더의 당일/1M은 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
+  데이터: Yahoo Finance, 일본 재무성 · 빨강 상승 / 파랑 하락
+</footer>
+<script>
+const SECTOR_ORDER = ["Information Technology","Financials","Health Care","Consumer Discretionary","Communication Services",
+  "Industrials","Consumer Staples","Energy","Utilities","Real Estate","Materials"];
+const fmtNum = (v, kind) => v == null ? "–" :
+  kind === "yld" ? v.toFixed(3) + "%" :
+  Math.abs(v) >= 1000 ? v.toLocaleString("en-US", {maximumFractionDigits: 0}) :
+  Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
+const fmtChg = (v, kind) => {
+  if (v == null) return `<span class="chg flat">–</span>`;
+  const cls = v > 0 ? "up" : v < 0 ? "down" : "flat";
+  const s = (v > 0 ? "+" : "") + v.toFixed(kind === "yld" ? 1 : 2) + (kind === "yld" ? "bp" : "%");
+  return `<span class="chg ${cls}">${s}</span>`;
+};
+const fmtMcap = v => v == null ? "–" : v >= 1e12 ? (v/1e12).toFixed(2) + "T" : (v/1e9).toFixed(0) + "B";
+
+function renderMacro(macro, asof) {
+  const el = document.getElementById("macro");
+  el.innerHTML = Object.entries(macro).map(([grp, items]) => `
+    <div class="card"><h2>${grp}</h2>
+      <div class="hdr"><span></span><span>Close</span><span>Day</span><span>1M</span></div>
+      ${items.map(it => `
+        <div class="row">
+          <span class="n">${it.name}${it.asof && it.asof !== asof ? `<small>${it.asof.slice(5)}</small>` : ""}</span>
+          <span class="v">${fmtNum(it.close, it.kind)}</span>
+          ${fmtChg(it.day, it.kind)}${fmtChg(it.m1, it.kind)}
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+let sortKey = "mcap", sortAsc = false;
+function renderSectors(stocks) {
+  const bySector = {};
+  for (const s of stocks) (bySector[s.sector] ||= []).push(s);
+  const sectors = [...SECTOR_ORDER.filter(s => bySector[s]), ...Object.keys(bySector).filter(s => !SECTOR_ORDER.includes(s))];
+  const avg = (arr, k) => { const v = arr.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const cmp = (a, b) => {
+    const x = a[sortKey], y = b[sortKey];
+    if (x == null) return 1; if (y == null) return -1;
+    return (typeof x === "string" ? x.localeCompare(y) : x - y) * (sortAsc ? 1 : -1);
+  };
+  const cols = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["m1","1M"],["mcap","Mkt Cap"]];
+  const open = new Set([...document.querySelectorAll("details.sector[open]")].map(d => d.dataset.sector));
+  document.getElementById("sectors").innerHTML = sectors.map(sec => {
+    const rows = [...bySector[sec]].sort(cmp);
+    return `<details class="sector" data-sector="${sec}" ${open.has(sec) ? "open" : ""}>
+      <summary><span class="n">${sec}<small>${rows.length}</small></span>
+        <span></span>
+        <span><span class="lbl">Day</span>${fmtChg(avg(rows,"day"))}</span>
+        <span><span class="lbl">1M</span>${fmtChg(avg(rows,"m1"))}</span></summary>
+      <table><thead><tr>${cols.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
+        <td>${r.ticker}</td><td title="${r.name}">${r.name}</td><td>${fmtNum(r.close)}</td>
+        <td>${fmtChg(r.day)}</td><td>${fmtChg(r.m1)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
+      </tbody></table></details>`;
+  }).join("");
+  document.querySelectorAll("th").forEach(th => th.onclick = () => {
+    const k = th.dataset.k;
+    if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === "ticker" || k === "name"); }
+    renderSectors(stocks); applyFilter();
+  });
+}
+
+function applyFilter() {
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  document.querySelectorAll("details.sector").forEach(d => {
+    let n = 0;
+    d.querySelectorAll("tbody tr").forEach(tr => { const hit = !q || tr.dataset.t.includes(q); tr.classList.toggle("hide", !hit); n += hit; });
+    d.style.display = n ? "" : "none";
+    if (q) d.open = true;
+  });
+}
+
+async function main() {
+  const r = await fetch("data/latest.json?" + Date.now());
+  const d = await r.json();
+  const ageDays = (Date.now() - new Date(d.updated_kst.replace(" ", "T") + "+09:00")) / 864e5;
+  document.getElementById("meta").textContent = `기준 ${d.asof} (US) · 갱신 ${d.updated_kst} KST`;
+  document.getElementById("stale").hidden = ageDays < 4;
+  document.getElementById("cnt").textContent = `${d.stocks.length} 종목`;
+  renderMacro(d.macro, d.asof);
+  renderSectors(d.stocks);
+  document.getElementById("q").addEventListener("input", applyFilter);
+  document.getElementById("expand").onclick = () => document.querySelectorAll("details.sector").forEach(x => x.open = true);
+  document.getElementById("collapse").onclick = () => document.querySelectorAll("details.sector").forEach(x => x.open = false);
+  document.querySelector("details.sector")?.setAttribute("open", "");
+}
+main().catch(e => { document.getElementById("meta").textContent = "데이터 로드 실패: " + e; });
+</script>
+</body>
+</html>
