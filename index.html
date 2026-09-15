@@ -70,6 +70,7 @@
   a.t { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-3); }
   a.t:hover { color: var(--down); border-bottom-color: var(--down); }
   td:nth-child(2) { color: var(--text-2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  td .sec { color: var(--text-3); font-size: 11px; margin-left: 6px; }
   td .chg { display: inline-block; }
   td.post .pv { color: var(--text-2); margin-right: 6px; }
   .tw { overflow-x: auto; }
@@ -91,6 +92,10 @@
 <main>
   <section class="macro" id="macro"></section>
   <div class="tools">
+    <h2>S&amp;P 500 Top 20 <small style="color:var(--text-3);font-weight:400">시가총액 상위</small></h2>
+  </div>
+  <section id="top"></section>
+  <div class="tools" style="margin-top:20px">
     <h2>S&amp;P 500 by Sector <small id="cnt" style="color:var(--text-3);font-weight:400"></small></h2>
     <input id="q" type="search" placeholder="티커 / 회사명 검색" autocomplete="off">
     <button id="expand">모두 펼치기</button>
@@ -101,7 +106,7 @@
 <footer>
   종가 = 직전 완료 거래일 · 당일 = 전일 대비 % (채권은 bp) · After = 시간외(애프터마켓) 가격과 종가 대비 % ·
   1M/3M = 달력 1개월/3개월 전 직전 거래일 대비 % (채권은 bp) · YTD = 전년 말 종가 대비 % ·
-  섹터 헤더의 당일/1M/3M/YTD는 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
+  Top 20 = 시가총액 상위 20종목 · 섹터/Top 20 헤더의 당일/1M/3M/YTD는 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
   티커·지수명을 누르면 1Y 차트와 재무 상세 · 데이터: Yahoo Finance, 일본 재무성 · 빨강 상승 / 파랑 하락
 </footer>
 <script>
@@ -134,45 +139,59 @@ function renderMacro(macro, asof) {
 }
 
 let sortKey = "mcap", sortAsc = false;
+const avg = (arr, k) => { const v = arr.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+const cmp = (a, b) => {
+  const x = a[sortKey], y = b[sortKey];
+  if (x == null) return 1; if (y == null) return -1;
+  return (typeof x === "string" ? x.localeCompare(y) : x - y) * (sortAsc ? 1 : -1);
+};
+const COLS = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["ytd","YTD"],["mcap","Mkt Cap"]];
+const fmtPost = r => r.post == null ? `<span class="chg flat">–</span>` :
+  `<span class="pv">${fmtNum(r.post)}</span>${fmtChg(r.post_chg)}`;
+
+// one accordion group: summary with equal-weight averages + sortable table. showSector tags each row with its sector.
+function groupHTML(title, rows, key, isOpen, showSector = false, cls = "sector") {
+  return `<details class="${cls}" data-sector="${key}" ${isOpen ? "open" : ""}>
+    <summary><span class="n">${title}<small>${rows.length}</small></span>
+      <span></span>
+      <span><span class="lbl">Day</span>${fmtChg(avg(rows,"day"))}</span>
+      <span><span class="lbl">1M</span>${fmtChg(avg(rows,"m1"))}</span>
+      <span><span class="lbl">3M</span>${fmtChg(avg(rows,"m3"))}</span>
+      <span><span class="lbl">YTD</span>${fmtChg(avg(rows,"ytd"))}</span></summary>
+    <div class="tw"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
+      <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td title="${r.name}">${r.name}${showSector ? `<span class="sec">${r.sector}</span>` : ""}</td><td>${fmtNum(r.close)}</td>
+      <td>${fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
+    </tbody></table></div></details>`;
+}
+
+function renderTop(stocks) {
+  const top = stocks.filter(s => s.mcap != null).sort((a, b) => b.mcap - a.mcap).slice(0, 20).sort(cmp);
+  const wasOpen = document.querySelector("#top details")?.open ?? true;
+  document.getElementById("top").innerHTML = groupHTML("시가총액 상위", top, "__top", wasOpen, true, "sector top");
+}
+
 function renderSectors(stocks) {
   const bySector = {};
   for (const s of stocks) (bySector[s.sector] ||= []).push(s);
   const sectors = [...SECTOR_ORDER.filter(s => bySector[s]), ...Object.keys(bySector).filter(s => !SECTOR_ORDER.includes(s))];
-  const avg = (arr, k) => { const v = arr.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
-  const cmp = (a, b) => {
-    const x = a[sortKey], y = b[sortKey];
-    if (x == null) return 1; if (y == null) return -1;
-    return (typeof x === "string" ? x.localeCompare(y) : x - y) * (sortAsc ? 1 : -1);
-  };
-  const cols = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["ytd","YTD"],["mcap","Mkt Cap"]];
-  const fmtPost = r => r.post == null ? `<span class="chg flat">–</span>` :
-    `<span class="pv">${fmtNum(r.post)}</span>${fmtChg(r.post_chg)}`;
-  const open = new Set([...document.querySelectorAll("details.sector[open]")].map(d => d.dataset.sector));
-  document.getElementById("sectors").innerHTML = sectors.map(sec => {
-    const rows = [...bySector[sec]].sort(cmp);
-    return `<details class="sector" data-sector="${sec}" ${open.has(sec) ? "open" : ""}>
-      <summary><span class="n">${sec}<small>${rows.length}</small></span>
-        <span></span>
-        <span><span class="lbl">Day</span>${fmtChg(avg(rows,"day"))}</span>
-        <span><span class="lbl">1M</span>${fmtChg(avg(rows,"m1"))}</span>
-        <span><span class="lbl">3M</span>${fmtChg(avg(rows,"m3"))}</span>
-        <span><span class="lbl">YTD</span>${fmtChg(avg(rows,"ytd"))}</span></summary>
-      <div class="tw"><table><thead><tr>${cols.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
-      <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
-        <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td title="${r.name}">${r.name}</td><td>${fmtNum(r.close)}</td>
-        <td>${fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
-      </tbody></table></div></details>`;
-  }).join("");
+  const open = new Set([...document.querySelectorAll("#sectors details[open]")].map(d => d.dataset.sector));
+  document.getElementById("sectors").innerHTML = sectors.map(sec => groupHTML(sec, [...bySector[sec]].sort(cmp), sec, open.has(sec))).join("");
+}
+
+function renderAll(stocks) {
+  renderTop(stocks);
+  renderSectors(stocks);
   document.querySelectorAll("th").forEach(th => th.onclick = () => {
     const k = th.dataset.k;
     if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === "ticker" || k === "name"); }
-    renderSectors(stocks); applyFilter();
+    renderAll(stocks); applyFilter();
   });
 }
 
 function applyFilter() {
   const q = document.getElementById("q").value.trim().toLowerCase();
-  document.querySelectorAll("details.sector").forEach(d => {
+  document.querySelectorAll("#sectors details").forEach(d => {
     let n = 0;
     d.querySelectorAll("tbody tr").forEach(tr => { const hit = !q || tr.dataset.t.includes(q); tr.classList.toggle("hide", !hit); n += hit; });
     d.style.display = n ? "" : "none";
@@ -188,11 +207,11 @@ async function main() {
   document.getElementById("stale").hidden = ageDays < 4;
   document.getElementById("cnt").textContent = `${d.stocks.length} 종목`;
   renderMacro(d.macro, d.asof);
-  renderSectors(d.stocks);
+  renderAll(d.stocks);
   document.getElementById("q").addEventListener("input", applyFilter);
-  document.getElementById("expand").onclick = () => document.querySelectorAll("details.sector").forEach(x => x.open = true);
-  document.getElementById("collapse").onclick = () => document.querySelectorAll("details.sector").forEach(x => x.open = false);
-  document.querySelector("details.sector")?.setAttribute("open", "");
+  document.getElementById("expand").onclick = () => document.querySelectorAll("#sectors details").forEach(x => x.open = true);
+  document.getElementById("collapse").onclick = () => document.querySelectorAll("#sectors details").forEach(x => x.open = false);
+  document.querySelector("#sectors details")?.setAttribute("open", "");
 }
 main().catch(e => { document.getElementById("meta").textContent = "데이터 로드 실패: " + e; });
 </script>
