@@ -11,6 +11,7 @@ Definitions:
 """
 import json
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -98,8 +99,7 @@ def stats(s: pd.Series, kind: str) -> dict | None:
     }
 
 
-def yahoo_ohlc(symbols: list[str], period: str = "13mo") -> dict[str, pd.DataFrame]:
-    """Daily OHLCV per symbol (tz-naive index, NaN closes dropped)."""
+def _download(symbols: list[str], period: str) -> dict[str, pd.DataFrame]:
     df = yf.download(
         symbols, period=period, interval="1d", group_by="ticker",
         auto_adjust=False, progress=False, threads=True,
@@ -114,6 +114,20 @@ def yahoo_ohlc(symbols: list[str], period: str = "13mo") -> dict[str, pd.DataFra
         if len(d):
             d.index = pd.to_datetime(d.index).tz_localize(None)
             out[sym] = d
+    return out
+
+
+def yahoo_ohlc(symbols: list[str], period: str = "13mo", retries: int = 3) -> dict[str, pd.DataFrame]:
+    """Daily OHLCV per symbol (tz-naive index, NaN closes dropped).
+    Yahoo batch downloads drop symbols at random ("possibly delisted"); retry the leftovers a few times."""
+    out = _download(symbols, period)
+    for attempt in range(retries):
+        missing = [s for s in symbols if s not in out]
+        if not missing:
+            break
+        time.sleep(5 * (attempt + 1))
+        print(f"retry {attempt + 1}: {len(missing)} symbols", file=sys.stderr)
+        out.update(_download(missing, period))
     return out
 
 
