@@ -1,6 +1,7 @@
 """Daily data pull -> data/latest.json (+ data/history/YYYY-MM-DD.json)
 
 Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV).
+Also writes data/ohlc/<symbol>.json (1Y daily OHLCV) for every Yahoo symbol, used by stock.html.
 Definitions:
   close   = last completed daily bar
   day     = close / prev close - 1          (bonds: yield diff in bp)
@@ -20,6 +21,7 @@ import yfinance as yf
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
 HIST = DATA / "history"
+OHLC = DATA / "ohlc"
 KST = ZoneInfo("Asia/Seoul")
 
 # label, yahoo symbol, kind ("px" price, "yld" yield in %)
@@ -93,7 +95,8 @@ def stats(s: pd.Series, kind: str) -> dict | None:
     }
 
 
-def yahoo_closes(symbols: list[str], period: str = "4mo") -> dict[str, pd.Series]:
+def yahoo_ohlc(symbols: list[str], period: str = "13mo") -> dict[str, pd.DataFrame]:
+    """Daily OHLCV per symbol (tz-naive index, NaN closes dropped)."""
     df = yf.download(
         symbols, period=period, interval="1d", group_by="ticker",
         auto_adjust=False, progress=False, threads=True,
@@ -101,14 +104,29 @@ def yahoo_closes(symbols: list[str], period: str = "4mo") -> dict[str, pd.Series
     out = {}
     for sym in symbols:
         try:
-            s = df[sym]["Close"] if len(symbols) > 1 else df["Close"]
+            d = df[sym] if len(symbols) > 1 else df
         except KeyError:
             continue
-        s = s.dropna()
-        if len(s):
-            s.index = pd.to_datetime(s.index).tz_localize(None)
-            out[sym] = s
+        d = d[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
+        if len(d):
+            d.index = pd.to_datetime(d.index).tz_localize(None)
+            out[sym] = d
     return out
+
+
+def slug(symbol: str) -> str:
+    """File-safe symbol: ^GSPC -> _GSPC, DX-Y.NYB -> DX-Y_NYB, GC=F -> GC_F."""
+    return "".join(c if c.isalnum() or c == "-" else "_" for c in symbol)
+
+
+def write_ohlc(symbol: str, d: pd.DataFrame) -> None:
+    """Last ~1Y of daily bars for the detail page: data/ohlc/<slug>.json."""
+    d = d[d.index >= d.index[-1] - pd.DateOffset(years=1)]
+    bars = [[i.strftime("%Y-%m-%d"), round(float(r.Open), 4), round(float(r.High), 4), round(float(r.Low), 4),
+             round(float(r.Close), 4), int(r.Volume) if pd.notna(r.Volume) else 0] for i, r in d.iterrows()]
+    OHLC.mkdir(parents=True, exist_ok=True)
+    (OHLC / f"{slug(symbol)}.json").write_text(json.dumps(
+        {"symbol": symbol, "asof": bars[-1][0], "cols": ["date", "o", "h", "l", "c", "v"], "bars": bars}))
 
 
 def jgb_series() -> dict[str, pd.Series]:
@@ -149,7 +167,10 @@ def jgb_series() -> dict[str, pd.Series]:
 
 def build_macro() -> tuple[dict, list[str]]:
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith("JGB:")]
-    closes = yahoo_closes(y_syms)
+    ohlc = yahoo_ohlc(y_syms)
+    for sym, d in ohlc.items():
+        write_ohlc(sym, d)
+    closes = {sym: d["Close"] for sym, d in ohlc.items()}
     try:
         closes.update(jgb_series())
     except Exception as e:
@@ -162,7 +183,7 @@ def build_macro() -> tuple[dict, list[str]]:
             if st is None:
                 missing.append(sym)
                 st = {"close": None, "day": None, "m1": None, "asof": None}
-            result[grp].append({"name": label, "symbol": sym, "kind": kind, **st})
+            result[grp].append({"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st})
     return result, missing
 
 
@@ -189,7 +210,10 @@ def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
 def build_stocks() -> tuple[list[dict], list[str], str]:
     meta = json.loads((DATA / "sp500.json").read_text())["rows"]
     tickers = [r["ticker"] for r in meta]
-    closes = yahoo_closes(tickers)
+    ohlc = yahoo_ohlc(tickers)
+    for sym, d in ohlc.items():
+        write_ohlc(sym, d)
+    closes = {sym: d["Close"] for sym, d in ohlc.items()}
     quotes = yahoo_quotes(tickers)
     rows, missing = [], []
     for r in meta:

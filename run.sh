@@ -18,7 +18,7 @@ if ! uv run python fetch.py >>"$LOG" 2>&1; then
   exit 2
 fi
 
-git add -A data index.html >/dev/null 2>&1
+git add -A data index.html stock.html >/dev/null 2>&1
 if git diff --cached --quiet; then
   echo "$(ts) nothing changed" >>"$LOG"
 else

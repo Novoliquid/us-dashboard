@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Market Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb; --card: #ffffff; --line: #e6e5e1; --line-2: #f0efec;
+    --text: #0b0b0b; --text-2: #52514e; --text-3: #8a8985;
+    --up: #e34948; --down: #2a78d6; --flat: #8a8985;
+    --up-bg: rgba(227,73,72,.10); --down-bg: rgba(42,120,214,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #222220; --line: #383835; --line-2: #2c2c2a;
+      --text: #ffffff; --text-2: #c3c2b7; --text-3: #8a8985;
+      --up: #e66767; --down: #3987e5;
+      --up-bg: rgba(230,103,103,.14); --down-bg: rgba(57,135,229,.14);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--text);
+         font: 14px/1.45 -apple-system, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", Roboto, sans-serif;
+         font-variant-numeric: tabular-nums; }
+  header, main { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+  header { padding-top: 16px; }
+  header a.back { color: var(--text-3); text-decoration: none; font-size: 13px; }
+  header a.back:hover { color: var(--text); }
+  .title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 6px 0 4px; }
+  .title h1 { font-size: 24px; margin: 0; }
+  .title .nm { font-size: 16px; color: var(--text-2); }
+  .title .sec { font-size: 12px; color: var(--text-3); }
+  .price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 14px; }
+  .price .px { font-size: 26px; font-weight: 600; }
+  .price .meta { color: var(--text-3); font-size: 12px; }
+  .chg { padding: 0 6px; border-radius: 4px; font-weight: 500; }
+  .up { color: var(--up); background: var(--up-bg); } .down { color: var(--down); background: var(--down-bg); } .flat { color: var(--flat); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin: 0 0 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card h2 .r { margin-left: auto; display: flex; gap: 4px; }
+  .card h2 .r button { font: inherit; font-size: 11px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text-2); cursor: pointer; letter-spacing: 0; }
+  .card h2 .r button.on { background: var(--text); color: var(--card); border-color: var(--text); }
+  #chart { height: 400px; width: 100%; }
+  .strip { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+  .strip b { color: var(--text); font-weight: 500; margin-left: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  .grid .card { margin: 0; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
+  .kv span:nth-child(odd) { color: var(--text-2); } .kv span:nth-child(even) { text-align: right; }
+  .kv small { color: var(--text-3); margin-left: 5px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 8px; text-align: right; border-top: 1px solid var(--line-2); white-space: nowrap; }
+  th { color: var(--text-3); font-weight: 500; font-size: 11px; border-top: 0; }
+  th:first-child, td:first-child { text-align: left; color: var(--text-2); }
+  td small { color: var(--text-3); margin-left: 4px; font-size: 11px; }
+  .tw { overflow-x: auto; }
+  p.sum { color: var(--text-2); font-size: 13px; margin: 0; }
+  p.sum a { color: var(--down); }
+  .note { color: var(--text-3); font-size: 12px; margin: 6px 0 0; }
+  footer { color: var(--text-3); font-size: 12px; padding: 20px; border-top: 1px solid var(--line); margin-top: 20px; }
+  @media (max-width: 640px) { header, main { padding-left: 12px; padding-right: 12px; } #chart { height: 300px; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="./">← US Market Dashboard</a>
+  <div class="title"><h1 id="tk">…</h1><span class="nm" id="nm"></span><span class="sec" id="sec"></span></div>
+  <div class="price" id="price"></div>
+</header>
+<main>
+  <div class="card">
+    <h2>1Y 캔들 <span class="r" id="range"><button data-m="3">3M</button><button data-m="6">6M</button><button data-m="12" class="on">1Y</button></span></h2>
+    <div id="chart"></div>
+    <div class="strip" id="strip"></div>
+  </div>
+  <div id="fund"></div>
+</main>
+<footer id="foot">데이터: Yahoo Finance · 재무 데이터는 주 1회 갱신 · 컨센서스는 애널리스트 평균 · 빨강 상승 / 파랑 하락</footer>
+<script>
+const qs = new URLSearchParams(location.search);
+const SYM = qs.get("t") || "";
+const slug = s => [...s].map(c => /[A-Za-z0-9-]/.test(c) ? c : "_").join("");
+const isNum = v => typeof v === "number" && isFinite(v);
+const fmtPx = v => !isNum(v) ? "–" : Math.abs(v) >= 1000 ? v.toLocaleString("en-US", {maximumFractionDigits: 0}) : Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
+const chg = (v, d = 2, suf = "%") => {
+  if (!isNum(v)) return `<span class="chg flat">–</span>`;
+  return `<span class="chg ${v > 0 ? "up" : v < 0 ? "down" : "flat"}">${v > 0 ? "+" : ""}${v.toFixed(d)}${suf}</span>`;
+};
+const pct = v => isNum(v) ? (v * 100).toFixed(1) + "%" : "–";
+const x = v => isNum(v) ? v.toFixed(1) + "x" : "–";
+const money = v => !isNum(v) ? "–" : Math.abs(v) >= 1e12 ? (v / 1e12).toFixed(2) + "T" : Math.abs(v) >= 1e9 ? (v / 1e9).toFixed(1) + "B" : (v / 1e6).toFixed(0) + "M";
+const eps = v => isNum(v) ? v.toFixed(2) : "–";
+const growth = (a, b) => isNum(a) && isNum(b) && b !== 0 ? (a / Math.abs(b) - 1) * 100 : null;
+const yr = p => p ? p.slice(0, 4) : "";
+const qLabel = p => { const d = new Date(p); return `${d.getFullYear().toString().slice(2)}.${String(d.getMonth() + 1).padStart(2, "0")}`; };
+
+async function getJSON(url, optional = false) {
+  const r = await fetch(url + "?" + Date.now());
+  if (!r.ok) { if (optional) return null; throw new Error(`${url}: ${r.status}`); }
+  return r.json();
+}
+
+function renderChart(bars) {
+  const up = getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
+  const down = getComputedStyle(document.documentElement).getPropertyValue("--down").trim();
+  const text3 = getComputedStyle(document.documentElement).getPropertyValue("--text-3").trim();
+  const line2 = getComputedStyle(document.documentElement).getPropertyValue("--line-2").trim();
+  const el = document.getElementById("chart");
+  const chart = LightweightCharts.createChart(el, {
+    layout: { background: { type: "solid", color: "transparent" }, textColor: text3, fontFamily: "inherit" },
+    grid: { vertLines: { color: line2 }, horzLines: { color: line2 } },
+    rightPriceScale: { borderColor: line2 }, timeScale: { borderColor: line2, rightOffset: 3 },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    localization: { priceFormatter: p => fmtPx(p) },
+    autoSize: true,
+  });
+  const candles = chart.addCandlestickSeries({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
+  candles.setData(bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4] })));
+  const hasVol = bars.some(b => b[5] > 0);
+  if (hasVol) {
+    const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", lastValueVisible: false, priceLineVisible: false });
+    vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    vol.setData(bars.map(b => ({ time: b[0], value: b[5], color: (b[4] >= b[1] ? up : down) + "66" })));
+  }
+  const setRange = months => {
+    const last = new Date(bars[bars.length - 1][0]); const from = new Date(last); from.setMonth(from.getMonth() - months);
+    const fromStr = from.toISOString().slice(0, 10);
+    const first = bars.find(b => b[0] >= fromStr) || bars[0];
+    chart.timeScale().setVisibleRange({ from: first[0], to: bars[bars.length - 1][0] });
+  };
+  document.querySelectorAll("#range button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#range button").forEach(o => o.classList.toggle("on", o === b)); setRange(+b.dataset.m);
+  });
+  setRange(12);
+}
+
+function renderStrip(bars, kind) {
+  const closes = bars.map(b => b[4]), last = closes[closes.length - 1];
+  const hi = Math.max(...bars.map(b => b[2])), lo = Math.min(...bars.map(b => b[3]));
+  const y = bars[bars.length - 1][0].slice(0, 4);
+  const prevYear = [...bars].reverse().find(b => b[0] < `${y}-01-01`);
+  const isYld = kind === "yld";
+  const r = (a, b) => isYld ? chg((a - b) * 100, 1, "bp") : chg(growth(a, b));
+  document.getElementById("strip").innerHTML = [
+    `52주 고<b>${fmtPx(hi)}</b>`, `52주 저<b>${fmtPx(lo)}</b>`,
+    `고점 대비${isYld ? chg((last - hi) * 100, 1, "bp") : chg(growth(last, hi))}`,
+    `1Y${r(last, closes[0])}`, prevYear ? `YTD${r(last, prevYear[4])}` : "",
+    `기준 <b>${bars[bars.length - 1][0]}</b>`,
+  ].join("");
+}
+
+function renderFund(f, close) {
+  const R = f.ratios || {};
+  const cur = f.profile?.currency && f.profile.currency !== "USD" ? f.profile.currency + " " : "$";
+  const kv = rows => `<div class="kv">${rows.map(([k, v]) => `<span>${k}</span><span>${v}</span>`).join("")}</div>`;
+  const upside = isNum(R.target) && isNum(close) ? growth(R.target, close) : null;
+  const rec = { strong_buy: "적극 매수", buy: "매수", hold: "중립", underperform: "비중 축소", sell: "매도" }[R.rec] || (R.rec ?? "–");
+
+  // quarterly: newest 4 shown oldest→newest; YoY for latest if a year-ago quarter exists (5th column)
+  const q = (f.quarterly || []).slice(0, 4).reverse();
+  const qa = f.quarterly?.[4];
+  const yoy = (key) => qa && q.length === 4 ? growth(q[3][key], qa[key]) : null;
+  const qTable = q.length ? `<div class="tw"><table><thead><tr><th></th>${q.map(r => `<th>${qLabel(r.period)}</th>`).join("")}<th>YoY</th></tr></thead><tbody>
+    ${[["매출", "rev", money], ["영업이익", "op", money], ["순이익", "ni", money], ["EPS", "eps", eps]].map(([l, k, fm]) =>
+      `<tr><td>${l}</td>${q.map(r => `<td>${fm(r[k])}</td>`).join("")}<td>${chg(yoy(k), 1)}</td></tr>`).join("")}
+    <tr><td>영업이익률</td>${q.map(r => `<td>${isNum(r.op) && isNum(r.rev) && r.rev ? pct(r.op / r.rev) : "–"}</td>`).join("")}<td></td></tr>
+  </tbody></table></div><p class="note">단위: ${cur} · 분기 말 기준 · YoY = 최근 분기 vs 전년 동기</p>` : `<p class="note">분기 실적 없음</p>`;
+
+  const a = (f.annual || []).slice(0, 3).reverse();
+  const a4 = f.annual || [];
+  const prevOf = r => a4[a4.indexOf(r) + 1];
+  const aTable = a.length ? `<div class="tw"><table><thead><tr><th></th>${a.map(r => `<th>FY${yr(r.period)}<small>(~${r.period.slice(5)})</small></th>`).join("")}</tr></thead><tbody>
+    ${[["매출", "rev", money], ["영업이익", "op", money], ["순이익", "ni", money], ["EPS", "eps", eps]].map(([l, k, fm]) =>
+      `<tr><td>${l}</td>${a.map(r => { const p = prevOf(r); return `<td>${fm(r[k])}${p ? `<small>${chg(growth(r[k], p[k]), 0)}</small>` : ""}</td>`; }).join("")}</tr>`).join("")}
+    <tr><td>영업이익률</td>${a.map(r => `<td>${isNum(r.op) && isNum(r.rev) && r.rev ? pct(r.op / r.rev) : "–"}</td>`).join("")}</tr>
+  </tbody></table></div><p class="note">단위: ${cur} · 회계연도 말 기준 · 작은 수치는 전년 대비 증감률</p>` : `<p class="note">연간 실적 없음</p>`;
+
+  const E = f.estimates || {}, fy0 = f.fy_end ? +yr(f.fy_end) + 1 : null;
+  const cols = [["0q", "다음 분기"], ["0y", fy0 ? `FY${fy0}E` : "올해 E"], ["+1y", fy0 ? `FY${fy0 + 1}E` : "내년 E"]];
+  const est = (k, p) => E[k]?.[p];
+  const eTable = (E.eps && Object.keys(E.eps).length) ? `<div class="tw"><table><thead><tr><th></th>${cols.map(([, l]) => `<th>${l}</th>`).join("")}</tr></thead><tbody>
+    <tr><td>매출 컨센서스</td>${cols.map(([p]) => { const e = est("rev", p); return `<td>${e ? money(e.avg) + `<small>${chg(isNum(e.growth) ? e.growth * 100 : null, 1)}</small>` : "–"}</td>`; }).join("")}</tr>
+    <tr><td>EPS 컨센서스</td>${cols.map(([p]) => { const e = est("eps", p); return `<td>${e ? eps(e.avg) + `<small>${chg(isNum(e.growth) ? e.growth * 100 : null, 1)}</small>` : "–"}</td>`; }).join("")}</tr>
+    <tr><td>EPS 범위 (low–high)</td>${cols.map(([p]) => { const e = est("eps", p); return `<td>${e && isNum(e.low) ? `${eps(e.low)} – ${eps(e.high)}` : "–"}</td>`; }).join("")}</tr>
+    <tr><td>애널리스트 수</td>${cols.map(([p]) => { const e = est("eps", p); return `<td>${e && isNum(e.n) ? e.n : "–"}</td>`; }).join("")}</tr>
+  </tbody></table></div><p class="note">작은 수치 = 전년(전년 동기) 대비 예상 성장률 · 회계연도는 마지막 보고 연도 + 1 기준</p>` : `<p class="note">컨센서스 없음</p>`;
+
+  const ed = (f.earnings_dates || []).filter(d => isNum(d.actual)).slice(0, 4);
+  const next = (f.earnings_dates || []).find(d => !isNum(d.actual) && d.date >= f.updated_kst.slice(0, 10));
+  const edTable = ed.length ? `<div class="tw"><table><thead><tr><th>발표일</th><th>EPS 예상</th><th>실제</th><th>서프라이즈</th></tr></thead><tbody>
+    ${ed.map(d => `<tr><td>${d.date}</td><td>${eps(d.est)}</td><td>${eps(d.actual)}</td><td>${chg(d.surprise, 1)}</td></tr>`).join("")}
+  </tbody></table></div>${next ? `<p class="note">다음 실적 발표: ${next.date}${isNum(next.est) ? ` (EPS 예상 ${eps(next.est)})` : ""}</p>` : ""}` : `<p class="note">발표 이력 없음</p>`;
+
+  document.getElementById("fund").innerHTML = `
+    <div class="grid">
+      <div class="card"><h2>밸류에이션</h2>${kv([
+        ["P/E (TTM)", x(R.pe)], ["P/E (Fwd)", x(R.fpe)], ["P/B", x(R.pb)], ["P/S (TTM)", x(R.ps)],
+        ["EV/EBITDA", x(R.ev_ebitda)], ["PEG", x(R.peg)],
+        ["EPS TTM / Fwd", `${eps(R.eps_ttm)} / ${eps(R.eps_fwd)}`], ["시가총액", money(R.mcap)],
+      ])}</div>
+      <div class="card"><h2>수익성 · 재무</h2>${kv([
+        ["ROE", pct(R.roe)], ["ROA", pct(R.roa)], ["매출총이익률", pct(R.gm)], ["영업이익률", pct(R.om)], ["순이익률", pct(R.nm)],
+        ["매출 성장 (최근 분기 YoY)", pct(R.rev_growth)], ["부채비율 (D/E)", isNum(R.de) ? R.de.toFixed(0) + "%" : "–"],
+        ["잉여현금흐름 (TTM)", money(R.fcf)],
+      ])}</div>
+      <div class="card"><h2>배당 · 시장</h2>${kv([
+        ["배당수익률", isNum(R.div_yield) ? R.div_yield.toFixed(2) + "%" : "–"], ["배당성향", pct(R.payout)], ["베타", isNum(R.beta) ? R.beta.toFixed(2) : "–"],
+        ["52주 고 / 저", `${fmtPx(R.hi52)} / ${fmtPx(R.lo52)}`],
+        ["목표주가 (평균)", isNum(R.target) ? `${fmtPx(R.target)}${chg(upside, 1)}` : "–"],
+        ["투자의견", `${rec}${isNum(R.analysts) ? `<small>${R.analysts}명</small>` : ""}`],
+      ])}</div>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="card"><h2>최근 4개 분기 실적</h2>${qTable}</div>
+      <div class="card"><h2>연간 실적 (3년)</h2>${aTable}</div>
+    </div>
+    <div class="grid" style="margin-top:12px">
+      <div class="card"><h2>컨센서스</h2>${eTable}</div>
+      <div class="card"><h2>실적 발표 (EPS)</h2>${edTable}</div>
+    </div>
+    ${f.profile?.summary ? `<div class="card" style="margin-top:12px"><h2>회사 개요 <span style="text-transform:none;letter-spacing:0;font-weight:400">${[f.profile.industry, f.profile.employees ? f.profile.employees.toLocaleString() + "명" : ""].filter(Boolean).join(" · ")}</span></h2>
+      <p class="sum">${f.profile.summary}${f.profile.summary.length >= 600 ? "…" : ""}${f.profile.website ? ` <a href="${f.profile.website}" target="_blank" rel="noopener">${f.profile.website.replace(/^https?:\/\//, "")}</a>` : ""}</p></div>` : ""}
+    <p class="note">재무 갱신 ${f.updated_kst} KST · 재무 데이터는 주 1회 갱신되어 시세보다 늦을 수 있음</p>`;
+}
+
+async function main() {
+  if (!SYM) throw new Error("no symbol");
+  document.title = `${SYM} · US Market Dashboard`;
+  document.getElementById("tk").textContent = SYM;
+  const [latest, ohlc] = await Promise.all([getJSON("data/latest.json"), getJSON(`data/ohlc/${slug(SYM)}.json`)]);
+  const stock = latest.stocks.find(s => s.ticker === SYM);
+  const macro = Object.values(latest.macro).flat().find(m => m.symbol === SYM);
+  const row = stock || macro;
+  const kind = row?.kind || "px";
+  if (row) {
+    document.getElementById("nm").textContent = row.name === SYM ? "" : row.name;
+    document.getElementById("sec").textContent = stock ? stock.sector : "";
+    const isYld = kind === "yld";
+    document.getElementById("price").innerHTML = [
+      `<span class="px">${isYld ? row.close.toFixed(3) + "%" : fmtPx(row.close)}</span>`,
+      `<span>당일 ${chg(row.day, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`,
+      stock && isNum(stock.post) ? `<span>After <span style="color:var(--text-2)">${fmtPx(stock.post)}</span> ${chg(stock.post_chg)}<small class="meta"> ${stock.post_time} ET</small></span>` : "",
+      `<span>1M ${chg(row.m1, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`, `<span>3M ${chg(row.m3, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`,
+      `<span class="meta">기준 ${row.asof} (US) · 갱신 ${latest.updated_kst} KST</span>`,
+    ].join("");
+  }
+  renderChart(ohlc.bars);
+  renderStrip(ohlc.bars, kind);
+  if (stock) {
+    const f = await getJSON(`data/fund/${SYM}.json`, true);
+    if (f) renderFund(f, stock.close);
+    else document.getElementById("fund").innerHTML = `<p class="note">재무 데이터 아직 없음 (주간 갱신 대기)</p>`;
+  }
+}
+main().catch(e => { document.getElementById("price").innerHTML = `<span class="meta">데이터 로드 실패: ${e.message}</span>`; });
+</script>
+</body>
+</html>
