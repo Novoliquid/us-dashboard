@@ -6,6 +6,7 @@ Definitions:
   close   = last completed daily bar
   day     = close / prev close - 1          (bonds: yield diff in bp)
   m1/m3   = close / close on (asof - 1/3 calendar months, or the last trading day before) - 1
+  ytd     = close / last close of the previous calendar year - 1 (bonds: bp)
   post    = after-hours price / % vs close (stocks only, same session as asof)
 """
 import json
@@ -86,11 +87,13 @@ def stats(s: pd.Series, kind: str) -> dict | None:
             return None
         return round((a - b) * 100 if kind == "yld" else (a / b - 1) * 100, 2)  # yld -> bp
 
+    prev_ye = s[s.index < pd.Timestamp(year=asof.year, month=1, day=1)]  # last close of previous year
     return {
         "close": close,
         "day": chg(close, prev),
         "m1": chg(close, base(1)),
         "m3": chg(close, base(3)),
+        "ytd": chg(close, float(prev_ye.iloc[-1]) if len(prev_ye) else None),
         "asof": asof.strftime("%Y-%m-%d"),
     }
 
@@ -252,6 +255,7 @@ def main() -> int:
             "day": "close / prev close - 1 (bonds: bp)",
             "m1": "close / close 1 calendar month earlier (last trading day before) - 1 (bonds: bp)",
             "m3": "same as m1 with 3 calendar months",
+            "ytd": "close / last close of previous calendar year - 1 (bonds: bp)",
             "post": "after-hours price and % vs close, same session as asof; time in ET",
         },
     }

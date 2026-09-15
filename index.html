@@ -56,7 +56,7 @@
   .tools input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); width: 220px; font: inherit; }
   .tools button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text-2); cursor: pointer; font: inherit; font-size: 12px; }
   details.sector { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; }
-  details.sector summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 10px; align-items: baseline; }
+  details.sector summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto auto auto auto auto; gap: 10px; align-items: baseline; }
   details.sector summary::-webkit-details-marker { display: none; }
   details.sector summary .n { font-weight: 600; font-size: 15px; }
   details.sector summary .n small { color: var(--text-3); font-weight: 400; margin-left: 8px; }
@@ -100,8 +100,8 @@
 </main>
 <footer>
   종가 = 직전 완료 거래일 · 당일 = 전일 대비 % (채권은 bp) · After = 시간외(애프터마켓) 가격과 종가 대비 % ·
-  1M/3M = 달력 1개월/3개월 전 직전 거래일 대비 % (채권은 bp) ·
-  섹터 헤더의 당일/1M은 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
+  1M/3M = 달력 1개월/3개월 전 직전 거래일 대비 % (채권은 bp) · YTD = 전년 말 종가 대비 % ·
+  섹터 헤더의 당일/1M/3M/YTD는 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
   티커·지수명을 누르면 1Y 차트와 재무 상세 · 데이터: Yahoo Finance, 일본 재무성 · 빨강 상승 / 파랑 하락
 </footer>
 <script>
@@ -144,7 +144,7 @@ function renderSectors(stocks) {
     if (x == null) return 1; if (y == null) return -1;
     return (typeof x === "string" ? x.localeCompare(y) : x - y) * (sortAsc ? 1 : -1);
   };
-  const cols = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["mcap","Mkt Cap"]];
+  const cols = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["ytd","YTD"],["mcap","Mkt Cap"]];
   const fmtPost = r => r.post == null ? `<span class="chg flat">–</span>` :
     `<span class="pv">${fmtNum(r.post)}</span>${fmtChg(r.post_chg)}`;
   const open = new Set([...document.querySelectorAll("details.sector[open]")].map(d => d.dataset.sector));
@@ -155,11 +155,12 @@ function renderSectors(stocks) {
         <span></span>
         <span><span class="lbl">Day</span>${fmtChg(avg(rows,"day"))}</span>
         <span><span class="lbl">1M</span>${fmtChg(avg(rows,"m1"))}</span>
-        <span><span class="lbl">3M</span>${fmtChg(avg(rows,"m3"))}</span></summary>
+        <span><span class="lbl">3M</span>${fmtChg(avg(rows,"m3"))}</span>
+        <span><span class="lbl">YTD</span>${fmtChg(avg(rows,"ytd"))}</span></summary>
       <div class="tw"><table><thead><tr>${cols.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
       <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
         <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td title="${r.name}">${r.name}</td><td>${fmtNum(r.close)}</td>
-        <td>${fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
+        <td>${fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
       </tbody></table></div></details>`;
   }).join("");
   document.querySelectorAll("th").forEach(th => th.onclick = () => {
