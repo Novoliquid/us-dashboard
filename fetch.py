@@ -182,11 +182,9 @@ def jgb_series() -> dict[str, pd.Series]:
     return out
 
 
-def build_macro() -> tuple[dict, list[str]]:
+def build_macro() -> tuple[dict, list[str], dict[str, pd.DataFrame]]:
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith("JGB:")]
     ohlc = yahoo_ohlc(y_syms)
-    for sym, d in ohlc.items():
-        write_ohlc(sym, d)
     closes = {sym: d["Close"] for sym, d in ohlc.items()}
     try:
         closes.update(jgb_series())
@@ -201,7 +199,7 @@ def build_macro() -> tuple[dict, list[str]]:
                 missing.append(sym)
                 st = {"close": None, "day": None, "m1": None, "asof": None}
             result[grp].append({"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st})
-    return result, missing
+    return result, missing, ohlc
 
 
 def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
@@ -224,12 +222,10 @@ def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
     return out
 
 
-def build_stocks() -> tuple[list[dict], list[str], str]:
+def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]:
     meta = json.loads((DATA / "sp500.json").read_text())["rows"]
     tickers = [r["ticker"] for r in meta]
     ohlc = yahoo_ohlc(tickers)
-    for sym, d in ohlc.items():
-        write_ohlc(sym, d)
     closes = {sym: d["Close"] for sym, d in ohlc.items()}
     quotes = yahoo_quotes(tickers)
     rows, missing = [], []
@@ -252,12 +248,12 @@ def build_stocks() -> tuple[list[dict], list[str], str]:
                      "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap})
     # market asof = most common asof date among stocks
     asof = pd.Series([x["asof"] for x in rows]).mode().iloc[0] if rows else None
-    return rows, missing, asof
+    return rows, missing, asof, ohlc
 
 
 def main() -> int:
-    macro, m_missing = build_macro()
-    stocks, s_missing, asof = build_stocks()
+    macro, m_missing, m_ohlc = build_macro()
+    stocks, s_missing, asof, s_ohlc = build_stocks()
     updated = datetime.now(KST)
     payload = {
         "asof": asof,
@@ -281,6 +277,12 @@ def main() -> int:
     if not ok:
         print(f"FAIL asof={asof} macro_missing={m_missing} stocks_missing={len(s_missing)}", file=sys.stderr)
         return 2
+    if prev_asof and asof < prev_asof:
+        # Yahoo sometimes serves the latest daily bar as NaN for a while (seen ~20:30 ET); never regress.
+        print(f"FAIL asof={asof} is older than previous {prev_asof}; keeping previous data", file=sys.stderr)
+        return 2
+    for sym, d in {**m_ohlc, **s_ohlc}.items():  # chart files only once the day's data is accepted
+        write_ohlc(sym, d)
     if prev_asof == asof:
         print(f"no new trading day (asof {asof}); refreshing anyway for non-equity items")
     DATA.mkdir(exist_ok=True)
