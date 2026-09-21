@@ -104,8 +104,8 @@ async function getJSON(url, optional = false) {
   return r.json();
 }
 
-// bars: [date, o, h, l, c, v]; line = true draws a single line of closes (Fear & Greed) instead of candles
-function renderChart(bars, line = false) {
+// bars: [date, o, h, l, c, v]; line = true draws a single line of closes (yields, Fear & Greed) instead of candles
+function renderChart(bars, line = false, kind = "px") {
   const up = getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
   const down = getComputedStyle(document.documentElement).getPropertyValue("--down").trim();
   const text3 = getComputedStyle(document.documentElement).getPropertyValue("--text-3").trim();
@@ -116,14 +116,14 @@ function renderChart(bars, line = false) {
     grid: { vertLines: { color: line2 }, horzLines: { color: line2 } },
     rightPriceScale: { borderColor: line2 }, timeScale: { borderColor: line2, rightOffset: 3 },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    localization: { priceFormatter: p => line ? Math.round(p).toString() : fmtPx(p) },
+    localization: { priceFormatter: p => kind === "fg" ? Math.round(p).toString() : kind === "yld" ? p.toFixed(3) + "%" : fmtPx(p) },
     autoSize: true,
   });
   if (line) {
     const s = chart.addLineSeries({ color: down, lineWidth: 2, priceLineVisible: false });
     s.setData(bars.map(b => ({ time: b[0], value: b[4] })));
     // fear / greed bands: 25 · 45 · 55 · 75
-    [[25, "Extreme Fear"], [45, "Fear"], [55, "Neutral"], [75, "Greed"]].forEach(([v, t]) =>
+    if (kind === "fg") [[25, "Extreme Fear"], [45, "Fear"], [55, "Neutral"], [75, "Greed"]].forEach(([v, t]) =>
       s.createPriceLine({ price: v, color: text3 + "88", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: false, title: t }));
   } else {
     const candles = chart.addCandlestickSeries({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
@@ -275,7 +275,7 @@ async function main() {
   // line files carry [date, value]; widen to the candle shape so the range/strip code is shared
   const bars = isLine ? ohlc.bars.map(b => [b[0], b[1], b[1], b[1], b[1], 0]) : ohlc.bars;
   document.getElementById("ctitle").textContent = isLine ? "추이" : "캔들";
-  renderChart(bars, isLine);
+  renderChart(bars, isLine, kind);
   renderStrip(bars, kind);
   if (stock) {
     const f = await getJSON(`data/fund/${SYM}.json`, true);

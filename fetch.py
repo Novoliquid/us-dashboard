@@ -1,8 +1,8 @@
 """Daily data pull -> data/latest.json (+ data/history/YYYY-MM-DD.json)
 
-Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV) and
+Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV), US 2Y (FRED DGS2) and
 Fear & Greed (CNN).
-Also writes data/ohlc/<symbol>.json (3Y daily OHLCV, or a daily line for Fear & Greed) for every symbol, used by stock.html.
+Also writes data/ohlc/<symbol>.json (3Y daily OHLCV, or a daily line for the non-Yahoo series) for every symbol, used by stock.html.
 Definitions:
   close   = last completed daily bar
   day     = close / prev close - 1          (bonds: yield diff in bp; Fear & Greed: point diff)
@@ -10,6 +10,7 @@ Definitions:
   ytd     = close / last close of the previous calendar year - 1 (bonds: bp)
   post    = after-hours price / % vs close (stocks only, same session as asof)
 """
+import io
 import json
 import sys
 import time
@@ -33,6 +34,7 @@ MACRO = {
         ("Dow Jones", "^DJI", "px"),
         ("S&P 500", "^GSPC", "px"),
         ("Nasdaq", "^IXIC", "px"),
+        ("Russell 2000", "^RUT", "px"),
     ],
     "Commodities": [
         ("Gold", "GC=F", "px"),
@@ -47,6 +49,7 @@ MACRO = {
         ("Dollar Index", "DX-Y.NYB", "px"),
     ],
     "Bonds": [
+        ("US 2Y", "FRED:DGS2", "yld"),  # Treasury constant maturity via FRED; posted next business day
         ("US 10Y", "^TNX", "yld"),
         ("US 30Y", "^TYX", "yld"),
         ("JP 10Y", "JGB:10年", "yld"),
@@ -60,12 +63,13 @@ MACRO = {
         ("Stocks (CNN)", "FNG:STOCK", "fg"),
     ],
 }
-EXTERNAL = ("JGB:", "FNG:")  # non-Yahoo symbol prefixes
+EXTERNAL = ("JGB:", "FNG:", "FRED:")  # non-Yahoo symbol prefixes
 OHLC_PERIOD = "37mo"  # 3Y of bars + buffer for the month-ago lookups
 OHLC_YEARS = 3
 
 JGB_CUR = "https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv"
 JGB_ALL = "https://www.mof.go.jp/jgbs/reference/interest_rate/data/jgbcm_all.csv"  # lags current month
+FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 FNG_CNN = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"  # ~1Y history; bot-blocked without browser headers
 UA = {"User-Agent": "Mozilla/5.0 (us-dashboard; personal use)"}
 BROWSER = {
@@ -177,11 +181,11 @@ def read_line(symbol: str) -> pd.Series | None:
         return None
 
 
-def write_line(symbol: str, s: pd.Series) -> None:
+def write_line(symbol: str, s: pd.Series, dec: int = 3) -> None:
     """Last ~3Y of a daily value series as a line chart file (same folder as OHLC, type=line)."""
     s = s.dropna()
     s = s[s.index >= s.index[-1] - pd.DateOffset(years=OHLC_YEARS)]
-    bars = [[i.strftime("%Y-%m-%d"), round(float(v), 1)] for i, v in s.items()]
+    bars = [[i.strftime("%Y-%m-%d"), round(float(v), dec)] for i, v in s.items()]
     OHLC.mkdir(parents=True, exist_ok=True)
     (OHLC / f"{slug(symbol)}.json").write_text(json.dumps(
         {"symbol": symbol, "asof": bars[-1][0], "type": "line", "cols": ["date", "c"], "bars": bars}))
@@ -260,35 +264,65 @@ def jgb_series() -> dict[str, pd.Series]:
     return out
 
 
+def fred_series(ids: list[str]) -> dict[str, pd.Series]:
+    """FRED daily series (e.g. DGS2 = 2Y Treasury constant maturity, %). '.' marks holidays -> dropped.
+    FRED's edge stalls Python requests that send a browser-style User-Agent (never answers); a curl-style UA responds instantly,
+    so try that first and fall back to the system curl."""
+    import subprocess
+    out = {}
+    for fid in ids:
+        url = FRED_CSV.format(id=fid)
+        text = None
+        try:
+            r = requests.get(url, headers={"User-Agent": "curl/8.7.1"}, timeout=20)
+            r.raise_for_status()
+            text = r.text
+        except Exception as e:
+            print(f"FRED {fid} via requests: {e}; trying curl", file=sys.stderr)
+            cp = subprocess.run(["curl", "-s", "-m", "30", url], capture_output=True, text=True)
+            if cp.returncode == 0 and cp.stdout.startswith("observation_date"):
+                text = cp.stdout
+        if not text:
+            raise RuntimeError(f"FRED {fid}: no data")
+        df = pd.read_csv(io.StringIO(text))
+        s = pd.to_numeric(df.iloc[:, 1], errors="coerce")
+        s.index = pd.to_datetime(df.iloc[:, 0])
+        out[f"FRED:{fid}"] = s.dropna()
+    return out
+
+
 def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series]]:
-    """prev = previous latest.json payload; Fear & Greed falls back to it when a source is down (best-effort feed)."""
+    """prev = previous latest.json payload; the non-Yahoo feeds (JGB, FRED, Fear & Greed) fall back to it when a source is down."""
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith(EXTERNAL)]
     ohlc = yahoo_ohlc(y_syms)
     closes = {sym: d["Close"] for sym, d in ohlc.items()}
-    try:
-        closes.update(jgb_series())
-    except Exception as e:
-        print(f"JGB fetch failed: {e}", file=sys.stderr)
+    lines = {}  # non-Yahoo daily series -> line chart files
+    for name, fn in (("JGB", jgb_series), ("FRED", lambda: fred_series([s.split(":")[1] for g in MACRO.values() for _, s, _ in g if s.startswith("FRED:")]))):
+        try:
+            lines.update(fn())
+        except Exception as e:
+            print(f"{name} fetch failed: {e}", file=sys.stderr)
     fng, fng_extra = fng_series()
-    closes.update(fng)
+    lines.update(fng)
+    closes.update(lines)
     prev_items = {it["symbol"]: it for grp in (prev or {}).get("macro", {}).values() for it in grp}
     result, missing = {}, []
     for grp, items in MACRO.items():
         result[grp] = []
         for label, sym, kind in items:
             st = stats(closes[sym], kind) if sym in closes else None
-            if st is None and sym.startswith("FNG:") and prev_items.get(sym, {}).get("close") is not None:
-                p = prev_items[sym]  # keep yesterday's reading rather than blanking the card
-                print(f"FNG {sym}: reusing previous ({p['asof']})", file=sys.stderr)
+            if st is None and sym.startswith(EXTERNAL) and prev_items.get(sym, {}).get("close") is not None:
+                p = prev_items[sym]  # keep yesterday's reading rather than blanking the row
+                print(f"{sym}: source down, reusing previous ({p['asof']})", file=sys.stderr)
                 result[grp].append({**p, "name": label, "kind": kind})
                 continue
             if st is None:
                 missing.append(sym)
                 st = {"close": None, "day": None, "m1": None, "asof": None}
-            item = {"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st}
+            item = {"name": label, "symbol": sym, "kind": kind, "chart": sym in closes, **st}
             item.update(fng_extra.get(sym, {}))  # rating + hist for the gauge card
             result[grp].append(item)
-    return result, missing, ohlc, fng
+    return result, missing, ohlc, lines
 
 
 def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
@@ -361,8 +395,8 @@ def main() -> int:
             "fg": "CNN Fear & Greed 0-100; changes in points",
         },
     }
-    # Fear & Greed is best-effort: a missing reading is reported but never fails the run
-    hard_missing = [m for m in m_missing if not m.startswith("FNG:")]
+    # non-Yahoo feeds are best-effort: a missing reading is reported but never fails the run
+    hard_missing = [m for m in m_missing if not m.startswith(EXTERNAL)]
     ok = asof is not None and len(hard_missing) == 0 and len(s_missing) <= 5
     prev_asof = prev.get("asof") if prev else None
     if not ok:
@@ -375,7 +409,7 @@ def main() -> int:
     for sym, d in {**m_ohlc, **s_ohlc}.items():  # chart files only once the day's data is accepted
         write_ohlc(sym, d)
     for sym, s in lines.items():
-        write_line(sym, s)
+        write_line(sym, s, dec=1 if sym.startswith("FNG:") else 3)
     if prev_asof == asof:
         print(f"no new trading day (asof {asof}); refreshing anyway for non-equity items")
     DATA.mkdir(exist_ok=True)
