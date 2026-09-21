@@ -1,7 +1,7 @@
 """Daily data pull -> data/latest.json (+ data/history/YYYY-MM-DD.json)
 
 Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV) and
-Fear & Greed (CNN for stocks, alternative.me for crypto).
+Fear & Greed (CNN).
 Also writes data/ohlc/<symbol>.json (3Y daily OHLCV, or a daily line for Fear & Greed) for every symbol, used by stock.html.
 Definitions:
   close   = last completed daily bar
@@ -58,7 +58,6 @@ MACRO = {
     ],
     "Fear & Greed": [  # 0-100 sentiment scores; "fg" kind -> changes in points
         ("Stocks (CNN)", "FNG:STOCK", "fg"),
-        ("Crypto", "FNG:CRYPTO", "fg"),
     ],
 }
 EXTERNAL = ("JGB:", "FNG:")  # non-Yahoo symbol prefixes
@@ -68,7 +67,6 @@ OHLC_YEARS = 3
 JGB_CUR = "https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv"
 JGB_ALL = "https://www.mof.go.jp/jgbs/reference/interest_rate/data/jgbcm_all.csv"  # lags current month
 FNG_CNN = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"  # ~1Y history; bot-blocked without browser headers
-FNG_ALT = "https://api.alternative.me/fng/?limit=0&format=json"  # full history
 UA = {"User-Agent": "Mozilla/5.0 (us-dashboard; personal use)"}
 BROWSER = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -205,7 +203,7 @@ def fng_hist(s: pd.Series) -> dict:
 def fng_series() -> tuple[dict[str, pd.Series], dict[str, dict]]:
     """Fear & Greed daily scores (0-100) keyed by UTC date, plus per-symbol extras for the gauge card:
     {"rating": source's label for the latest value, "hist": {prev_close, w1, m1, y1}}.
-    CNN only serves ~1Y, so it is merged with what we wrote before; alternative.me serves the full history."""
+    CNN only serves ~1Y, so it is merged with what we wrote before."""
     series, extra = {}, {}
     try:
         r = requests.get(FNG_CNN, headers=BROWSER, timeout=30)
@@ -223,16 +221,6 @@ def fng_series() -> tuple[dict[str, pd.Series], dict[str, dict]]:
             "m1": round(float(fg["previous_1_month"]), 1), "y1": round(float(fg["previous_1_year"]), 1)}}
     except Exception as e:
         print(f"FNG CNN failed: {e}", file=sys.stderr)
-    try:
-        r = requests.get(FNG_ALT, headers=UA, timeout=30)
-        r.raise_for_status()
-        data = r.json()["data"]
-        s = pd.Series({pd.Timestamp(datetime.fromtimestamp(int(p["timestamp"]), tz=timezone.utc).date()): float(p["value"]) for p in data})
-        s = s[~s.index.duplicated(keep="last")].sort_index()
-        series["FNG:CRYPTO"] = s
-        extra["FNG:CRYPTO"] = {"rating": data[0]["value_classification"], "hist": fng_hist(s)}
-    except Exception as e:
-        print(f"FNG alternative.me failed: {e}", file=sys.stderr)
     return series, extra
 
 
@@ -370,7 +358,7 @@ def main() -> int:
             "m3": "same as m1 with 3 calendar months",
             "ytd": "close / last close of previous calendar year - 1 (bonds: bp)",
             "post": "after-hours price and % vs close, same session as asof; time in ET",
-            "fg": "Fear & Greed 0-100 (CNN for stocks, alternative.me for crypto); changes in points",
+            "fg": "CNN Fear & Greed 0-100; changes in points",
         },
     }
     # Fear & Greed is best-effort: a missing reading is reported but never fails the run
