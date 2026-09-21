@@ -1,10 +1,11 @@
 """Daily data pull -> data/latest.json (+ data/history/YYYY-MM-DD.json)
 
-Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV).
-Also writes data/ohlc/<symbol>.json (1Y daily OHLCV) for every Yahoo symbol, used by stock.html.
+Sources: Yahoo Finance (yfinance) for everything except JGB yields (Japan MOF CSV) and
+Fear & Greed (CNN for stocks, alternative.me for crypto).
+Also writes data/ohlc/<symbol>.json (3Y daily OHLCV, or a daily line for Fear & Greed) for every symbol, used by stock.html.
 Definitions:
   close   = last completed daily bar
-  day     = close / prev close - 1          (bonds: yield diff in bp)
+  day     = close / prev close - 1          (bonds: yield diff in bp; Fear & Greed: point diff)
   m1/m3   = close / close on (asof - 1/3 calendar months, or the last trading day before) - 1
   ytd     = close / last close of the previous calendar year - 1 (bonds: bp)
   post    = after-hours price / % vs close (stocks only, same session as asof)
@@ -55,11 +56,24 @@ MACRO = {
         ("Bitcoin", "BTC-USD", "px"),
         ("Ethereum", "ETH-USD", "px"),
     ],
+    "Fear & Greed": [  # 0-100 sentiment scores; "fg" kind -> changes in points
+        ("Stocks (CNN)", "FNG:STOCK", "fg"),
+        ("Crypto", "FNG:CRYPTO", "fg"),
+    ],
 }
+EXTERNAL = ("JGB:", "FNG:")  # non-Yahoo symbol prefixes
+OHLC_PERIOD = "37mo"  # 3Y of bars + buffer for the month-ago lookups
+OHLC_YEARS = 3
 
 JGB_CUR = "https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv"
 JGB_ALL = "https://www.mof.go.jp/jgbs/reference/interest_rate/data/jgbcm_all.csv"  # lags current month
+FNG_CNN = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"  # ~1Y history; bot-blocked without browser headers
+FNG_ALT = "https://api.alternative.me/fng/?limit=0&format=json"  # full history
 UA = {"User-Agent": "Mozilla/5.0 (us-dashboard; personal use)"}
+BROWSER = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "application/json", "Referer": "https://www.cnn.com/markets/fear-and-greed", "Origin": "https://www.cnn.com",
+}
 
 
 def months_ago(d: pd.Timestamp, n: int) -> pd.Timestamp:
@@ -86,7 +100,11 @@ def stats(s: pd.Series, kind: str) -> dict | None:
     def chg(a: float, b):
         if b is None:
             return None
-        return round((a - b) * 100 if kind == "yld" else (a / b - 1) * 100, 2)  # yld -> bp
+        if kind == "yld":
+            return round((a - b) * 100, 2)  # bp
+        if kind == "fg":
+            return round(a - b, 1)  # points
+        return round((a / b - 1) * 100, 2)
 
     prev_ye = s[s.index < pd.Timestamp(year=asof.year, month=1, day=1)]  # last close of previous year
     return {
@@ -117,7 +135,7 @@ def _download(symbols: list[str], period: str) -> dict[str, pd.DataFrame]:
     return out
 
 
-def yahoo_ohlc(symbols: list[str], period: str = "13mo", retries: int = 3) -> dict[str, pd.DataFrame]:
+def yahoo_ohlc(symbols: list[str], period: str = OHLC_PERIOD, retries: int = 3) -> dict[str, pd.DataFrame]:
     """Daily OHLCV per symbol (tz-naive index, NaN closes dropped).
     Yahoo batch downloads drop symbols at random ("possibly delisted"); retry the leftovers a few times."""
     out = _download(symbols, period)
@@ -137,13 +155,67 @@ def slug(symbol: str) -> str:
 
 
 def write_ohlc(symbol: str, d: pd.DataFrame) -> None:
-    """Last ~1Y of daily bars for the detail page: data/ohlc/<slug>.json."""
-    d = d[d.index >= d.index[-1] - pd.DateOffset(years=1)]
+    """Last ~3Y of daily bars for the detail page: data/ohlc/<slug>.json."""
+    d = d[d.index >= d.index[-1] - pd.DateOffset(years=OHLC_YEARS)]
     bars = [[i.strftime("%Y-%m-%d"), round(float(r.Open), 4), round(float(r.High), 4), round(float(r.Low), 4),
              round(float(r.Close), 4), int(r.Volume) if pd.notna(r.Volume) else 0] for i, r in d.iterrows()]
     OHLC.mkdir(parents=True, exist_ok=True)
     (OHLC / f"{slug(symbol)}.json").write_text(json.dumps(
         {"symbol": symbol, "asof": bars[-1][0], "cols": ["date", "o", "h", "l", "c", "v"], "bars": bars}))
+
+
+def read_line(symbol: str) -> pd.Series | None:
+    """Previously written daily line (data/ohlc/<slug>.json, type=line) so short-history sources accumulate over time."""
+    f = OHLC / f"{slug(symbol)}.json"
+    if not f.exists():
+        return None
+    try:
+        old = json.loads(f.read_text())
+        if old.get("type") != "line":
+            return None
+        return pd.Series({pd.Timestamp(b[0]): float(b[1]) for b in old["bars"]}).sort_index()
+    except Exception as e:
+        print(f"read_line {symbol}: {e}", file=sys.stderr)
+        return None
+
+
+def write_line(symbol: str, s: pd.Series) -> None:
+    """Last ~3Y of a daily value series as a line chart file (same folder as OHLC, type=line)."""
+    s = s.dropna()
+    s = s[s.index >= s.index[-1] - pd.DateOffset(years=OHLC_YEARS)]
+    bars = [[i.strftime("%Y-%m-%d"), round(float(v), 1)] for i, v in s.items()]
+    OHLC.mkdir(parents=True, exist_ok=True)
+    (OHLC / f"{slug(symbol)}.json").write_text(json.dumps(
+        {"symbol": symbol, "asof": bars[-1][0], "type": "line", "cols": ["date", "c"], "bars": bars}))
+
+
+def fng_series() -> tuple[dict[str, pd.Series], dict[str, str]]:
+    """Fear & Greed daily scores (0-100) keyed by UTC date, plus the source's own rating label for the latest value.
+    CNN only serves ~1Y, so it is merged with what we wrote before; alternative.me serves the full history."""
+    series, ratings = {}, {}
+    try:
+        r = requests.get(FNG_CNN, headers=BROWSER, timeout=30)
+        r.raise_for_status()
+        j = r.json()
+        pts = j["fear_and_greed_historical"]["data"]
+        s = pd.Series({pd.Timestamp(datetime.fromtimestamp(p["x"] / 1000, tz=timezone.utc).date()): float(p["y"]) for p in pts})
+        prev = read_line("FNG:STOCK")
+        if prev is not None:
+            s = pd.concat([prev, s])
+        series["FNG:STOCK"] = s[~s.index.duplicated(keep="last")].sort_index()
+        ratings["FNG:STOCK"] = j["fear_and_greed"]["rating"].title()
+    except Exception as e:
+        print(f"FNG CNN failed: {e}", file=sys.stderr)
+    try:
+        r = requests.get(FNG_ALT, headers=UA, timeout=30)
+        r.raise_for_status()
+        data = r.json()["data"]
+        s = pd.Series({pd.Timestamp(datetime.fromtimestamp(int(p["timestamp"]), tz=timezone.utc).date()): float(p["value"]) for p in data})
+        series["FNG:CRYPTO"] = s[~s.index.duplicated(keep="last")].sort_index()
+        ratings["FNG:CRYPTO"] = data[0]["value_classification"]
+    except Exception as e:
+        print(f"FNG alternative.me failed: {e}", file=sys.stderr)
+    return series, ratings
 
 
 def jgb_series() -> dict[str, pd.Series]:
@@ -182,24 +254,36 @@ def jgb_series() -> dict[str, pd.Series]:
     return out
 
 
-def build_macro() -> tuple[dict, list[str], dict[str, pd.DataFrame]]:
-    y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith("JGB:")]
+def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series]]:
+    """prev = previous latest.json payload; Fear & Greed falls back to it when a source is down (best-effort feed)."""
+    y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith(EXTERNAL)]
     ohlc = yahoo_ohlc(y_syms)
     closes = {sym: d["Close"] for sym, d in ohlc.items()}
     try:
         closes.update(jgb_series())
     except Exception as e:
         print(f"JGB fetch failed: {e}", file=sys.stderr)
+    fng, ratings = fng_series()
+    closes.update(fng)
+    prev_items = {it["symbol"]: it for grp in (prev or {}).get("macro", {}).values() for it in grp}
     result, missing = {}, []
     for grp, items in MACRO.items():
         result[grp] = []
         for label, sym, kind in items:
             st = stats(closes[sym], kind) if sym in closes else None
+            if st is None and sym.startswith("FNG:") and prev_items.get(sym, {}).get("close") is not None:
+                p = prev_items[sym]  # keep yesterday's reading rather than blanking the card
+                print(f"FNG {sym}: reusing previous ({p['asof']})", file=sys.stderr)
+                result[grp].append({**p, "name": label, "kind": kind})
+                continue
             if st is None:
                 missing.append(sym)
                 st = {"close": None, "day": None, "m1": None, "asof": None}
-            result[grp].append({"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st})
-    return result, missing, ohlc
+            item = {"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st}
+            if sym in ratings:
+                item["rating"] = ratings[sym]
+            result[grp].append(item)
+    return result, missing, ohlc, fng
 
 
 def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
@@ -252,7 +336,9 @@ def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]
 
 
 def main() -> int:
-    macro, m_missing, m_ohlc = build_macro()
+    latest = DATA / "latest.json"
+    prev = json.loads(latest.read_text()) if latest.exists() else None
+    macro, m_missing, m_ohlc, lines = build_macro(prev)
     stocks, s_missing, asof, s_ohlc = build_stocks()
     updated = datetime.now(KST)
     payload = {
@@ -267,13 +353,13 @@ def main() -> int:
             "m3": "same as m1 with 3 calendar months",
             "ytd": "close / last close of previous calendar year - 1 (bonds: bp)",
             "post": "after-hours price and % vs close, same session as asof; time in ET",
+            "fg": "Fear & Greed 0-100 (CNN for stocks, alternative.me for crypto); changes in points",
         },
     }
-    ok = asof is not None and len(m_missing) == 0 and len(s_missing) <= 5
-    prev_asof = None
-    latest = DATA / "latest.json"
-    if latest.exists():
-        prev_asof = json.loads(latest.read_text()).get("asof")
+    # Fear & Greed is best-effort: a missing reading is reported but never fails the run
+    hard_missing = [m for m in m_missing if not m.startswith("FNG:")]
+    ok = asof is not None and len(hard_missing) == 0 and len(s_missing) <= 5
+    prev_asof = prev.get("asof") if prev else None
     if not ok:
         print(f"FAIL asof={asof} macro_missing={m_missing} stocks_missing={len(s_missing)}", file=sys.stderr)
         return 2
@@ -283,6 +369,8 @@ def main() -> int:
         return 2
     for sym, d in {**m_ohlc, **s_ohlc}.items():  # chart files only once the day's data is accepted
         write_ohlc(sym, d)
+    for sym, s in lines.items():
+        write_line(sym, s)
     if prev_asof == asof:
         print(f"no new trading day (asof {asof}); refreshing anyway for non-equity items")
     DATA.mkdir(exist_ok=True)

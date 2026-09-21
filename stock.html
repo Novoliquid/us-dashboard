@@ -73,13 +73,13 @@
 </header>
 <main>
   <div class="card">
-    <h2>1Y 캔들 <span class="r" id="range"><button data-m="3">3M</button><button data-m="6">6M</button><button data-m="12" class="on">1Y</button></span></h2>
+    <h2><span id="ctitle">캔들</span> <span class="r" id="range"><button data-m="3">3M</button><button data-m="6">6M</button><button data-m="12" class="on">1Y</button><button data-m="36">3Y</button></span></h2>
     <div id="chart"></div>
     <div class="strip" id="strip"></div>
   </div>
   <div id="fund"></div>
 </main>
-<footer id="foot">데이터: Yahoo Finance · 재무 데이터는 주 1회 갱신 · 컨센서스는 애널리스트 평균 · 빨강 상승 / 파랑 하락</footer>
+<footer id="foot">데이터: Yahoo Finance (Fear &amp; Greed: CNN · alternative.me) · 차트 최대 3Y · 재무 데이터는 주 1회 갱신 · 컨센서스는 애널리스트 평균 · 빨강 상승 / 파랑 하락</footer>
 <script>
 const qs = new URLSearchParams(location.search);
 const SYM = qs.get("t") || "";
@@ -104,7 +104,8 @@ async function getJSON(url, optional = false) {
   return r.json();
 }
 
-function renderChart(bars) {
+// bars: [date, o, h, l, c, v]; line = true draws a single line of closes (Fear & Greed) instead of candles
+function renderChart(bars, line = false) {
   const up = getComputedStyle(document.documentElement).getPropertyValue("--up").trim();
   const down = getComputedStyle(document.documentElement).getPropertyValue("--down").trim();
   const text3 = getComputedStyle(document.documentElement).getPropertyValue("--text-3").trim();
@@ -115,12 +116,20 @@ function renderChart(bars) {
     grid: { vertLines: { color: line2 }, horzLines: { color: line2 } },
     rightPriceScale: { borderColor: line2 }, timeScale: { borderColor: line2, rightOffset: 3 },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    localization: { priceFormatter: p => fmtPx(p) },
+    localization: { priceFormatter: p => line ? Math.round(p).toString() : fmtPx(p) },
     autoSize: true,
   });
-  const candles = chart.addCandlestickSeries({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
-  candles.setData(bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4] })));
-  const hasVol = bars.some(b => b[5] > 0);
+  if (line) {
+    const s = chart.addLineSeries({ color: down, lineWidth: 2, priceLineVisible: false });
+    s.setData(bars.map(b => ({ time: b[0], value: b[4] })));
+    // fear / greed bands: 25 · 45 · 55 · 75
+    [[25, "Extreme Fear"], [45, "Fear"], [55, "Neutral"], [75, "Greed"]].forEach(([v, t]) =>
+      s.createPriceLine({ price: v, color: text3 + "88", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: false, title: t }));
+  } else {
+    const candles = chart.addCandlestickSeries({ upColor: up, downColor: down, borderUpColor: up, borderDownColor: down, wickUpColor: up, wickDownColor: down });
+    candles.setData(bars.map(b => ({ time: b[0], open: b[1], high: b[2], low: b[3], close: b[4] })));
+  }
+  const hasVol = !line && bars.some(b => b[5] > 0);
   if (hasVol) {
     const vol = chart.addHistogramSeries({ priceFormat: { type: "volume" }, priceScaleId: "", lastValueVisible: false, priceLineVisible: false });
     vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
@@ -132,24 +141,37 @@ function renderChart(bars) {
     const first = bars.find(b => b[0] >= fromStr) || bars[0];
     chart.timeScale().setVisibleRange({ from: first[0], to: bars[bars.length - 1][0] });
   };
-  document.querySelectorAll("#range button").forEach(b => b.onclick = () => {
-    document.querySelectorAll("#range button").forEach(o => o.classList.toggle("on", o === b)); setRange(+b.dataset.m);
+  // hide range buttons the data can't fill (e.g. 3Y when only ~1Y of history exists)
+  const spanMonths = (new Date(bars[bars.length - 1][0]) - new Date(bars[0][0])) / (30.4 * 864e5);
+  document.querySelectorAll("#range button").forEach(b => {
+    b.hidden = +b.dataset.m > 12 && spanMonths < +b.dataset.m * 0.9;
+    b.onclick = () => { document.querySelectorAll("#range button").forEach(o => o.classList.toggle("on", o === b)); setRange(+b.dataset.m); };
   });
   setRange(12);
 }
 
+// bar on/just before the date `months` before the last bar
+const barMonthsAgo = (bars, months) => {
+  const from = new Date(bars[bars.length - 1][0]); from.setMonth(from.getMonth() - months);
+  const s = from.toISOString().slice(0, 10);
+  return [...bars].reverse().find(b => b[0] <= s);
+};
+
 function renderStrip(bars, kind) {
-  const closes = bars.map(b => b[4]), last = closes[closes.length - 1];
-  const hi = Math.max(...bars.map(b => b[2])), lo = Math.min(...bars.map(b => b[3]));
-  const y = bars[bars.length - 1][0].slice(0, 4);
-  const prevYear = [...bars].reverse().find(b => b[0] < `${y}-01-01`);
-  const isYld = kind === "yld";
-  const r = (a, b) => isYld ? chg((a - b) * 100, 1, "bp") : chg(growth(a, b));
+  const last = bars[bars.length - 1], lastDate = last[0];
+  const from52 = new Date(lastDate); from52.setFullYear(from52.getFullYear() - 1);
+  const yr1 = bars.filter(b => b[0] >= from52.toISOString().slice(0, 10));  // 52-week window only
+  const hi = Math.max(...yr1.map(b => b[2])), lo = Math.min(...yr1.map(b => b[3]));
+  const prevYear = [...bars].reverse().find(b => b[0] < `${lastDate.slice(0, 4)}-01-01`);
+  const b1y = barMonthsAgo(bars, 12), b3y = barMonthsAgo(bars, 36);
+  const isYld = kind === "yld", isFg = kind === "fg", pt = v => isFg ? Math.round(v).toString() : fmtPx(v);
+  const r = (a, b) => isYld ? chg((a - b) * 100, 1, "bp") : isFg ? chg(a - b, 1, "p") : chg(growth(a, b));
   document.getElementById("strip").innerHTML = [
-    `52주 고<b>${fmtPx(hi)}</b>`, `52주 저<b>${fmtPx(lo)}</b>`,
-    `고점 대비${isYld ? chg((last - hi) * 100, 1, "bp") : chg(growth(last, hi))}`,
-    `1Y${r(last, closes[0])}`, prevYear ? `YTD${r(last, prevYear[4])}` : "",
-    `기준 <b>${bars[bars.length - 1][0]}</b>`,
+    `52주 고<b>${pt(hi)}</b>`, `52주 저<b>${pt(lo)}</b>`,
+    `고점 대비${r(last[4], hi)}`,
+    b1y ? `1Y${r(last[4], b1y[4])}` : "", b3y ? `3Y${r(last[4], b3y[4])}` : "",
+    prevYear ? `YTD${r(last[4], prevYear[4])}` : "",
+    `기준 <b>${lastDate}</b>`,
   ].join("");
 }
 
@@ -236,20 +258,25 @@ async function main() {
   const macro = Object.values(latest.macro).flat().find(m => m.symbol === SYM);
   const row = stock || macro;
   const kind = row?.kind || "px";
+  const isLine = ohlc.type === "line";
   if (row) {
-    document.getElementById("nm").textContent = row.name === SYM ? "" : row.name;
+    document.getElementById("nm").textContent = row.name === SYM ? "" : (kind === "fg" ? `Fear & Greed · ${row.name}` : row.name);
     document.getElementById("sec").textContent = stock ? stock.sector : "";
-    const isYld = kind === "yld";
+    const isYld = kind === "yld", isFg = kind === "fg";
+    const [suf, dec] = isYld ? ["bp", 1] : isFg ? ["p", 1] : ["%", 2];
     document.getElementById("price").innerHTML = [
-      `<span class="px">${isYld ? row.close.toFixed(3) + "%" : fmtPx(row.close)}</span>`,
-      `<span>당일 ${chg(row.day, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`,
+      `<span class="px">${isYld ? row.close.toFixed(3) + "%" : isFg ? `${Math.round(row.close)} <span class="nm">${row.rating || ""}</span>` : fmtPx(row.close)}</span>`,
+      `<span>당일 ${chg(row.day, dec, suf)}</span>`,
       stock && isNum(stock.post) ? `<span>After <span style="color:var(--text-2)">${fmtPx(stock.post)}</span> ${chg(stock.post_chg)}<small class="meta"> ${stock.post_time} ET</small></span>` : "",
-      `<span>1M ${chg(row.m1, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`, `<span>3M ${chg(row.m3, isYld ? 1 : 2, isYld ? "bp" : "%")}</span>`,
-      `<span class="meta">기준 ${row.asof} (US) · 갱신 ${latest.updated_kst} KST</span>`,
+      `<span>1M ${chg(row.m1, dec, suf)}</span>`, `<span>3M ${chg(row.m3, dec, suf)}</span>`,
+      `<span class="meta">기준 ${row.asof} (${isFg ? "UTC" : "US"}) · 갱신 ${latest.updated_kst} KST</span>`,
     ].join("");
   }
-  renderChart(ohlc.bars);
-  renderStrip(ohlc.bars, kind);
+  // line files carry [date, value]; widen to the candle shape so the range/strip code is shared
+  const bars = isLine ? ohlc.bars.map(b => [b[0], b[1], b[1], b[1], b[1], 0]) : ohlc.bars;
+  document.getElementById("ctitle").textContent = isLine ? "추이" : "캔들";
+  renderChart(bars, isLine);
+  renderStrip(bars, kind);
   if (stock) {
     const f = await getJSON(`data/fund/${SYM}.json`, true);
     if (f) renderFund(f, stock.close);

@@ -41,6 +41,7 @@
   .row:first-of-type { border-top: 0; }
   .row .n { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .n small { color: var(--text-3); font-weight: 400; margin-left: 5px; font-size: 10px; }
+  .row .n small.rt { color: var(--text-2); font-weight: 500; font-size: 11px; }
   .row .v { text-align: right; min-width: 56px; }
   .chg { text-align: right; min-width: 58px; padding: 0 5px; border-radius: 4px; font-weight: 500; }
   .up { color: var(--up); background: var(--up-bg); }
@@ -107,19 +108,23 @@
   종가 = 직전 완료 거래일 · 당일 = 전일 대비 % (채권은 bp) · After = 시간외(애프터마켓) 가격과 종가 대비 % ·
   1M/3M = 달력 1개월/3개월 전 직전 거래일 대비 % (채권은 bp) · YTD = 전년 말 종가 대비 % ·
   Top 20 = 시가총액 상위 20종목 · 섹터/Top 20 헤더의 당일/1M/3M/YTD는 종목 동일가중 평균 · 원자재·FX·크립토는 미국 주식과 기준일이 다를 수 있음 ·
-  티커·지수명을 누르면 1Y 차트와 재무 상세 · 데이터: Yahoo Finance, 일본 재무성 · 빨강 상승 / 파랑 하락
+  Fear &amp; Greed = 0(극단적 공포)~100(극단적 탐욕), 주식은 CNN·크립토는 alternative.me, 변동은 포인트 ·
+  티커·지수명을 누르면 3Y 차트와 재무 상세 · 데이터: Yahoo Finance, 일본 재무성, CNN, alternative.me · 빨강 상승 / 파랑 하락
 </footer>
 <script>
 const SECTOR_ORDER = ["Information Technology","Financials","Health Care","Consumer Discretionary","Communication Services",
   "Industrials","Consumer Staples","Energy","Utilities","Real Estate","Materials"];
 const fmtNum = (v, kind) => v == null ? "–" :
   kind === "yld" ? v.toFixed(3) + "%" :
+  kind === "fg" ? Math.round(v).toString() :
   Math.abs(v) >= 1000 ? v.toLocaleString("en-US", {maximumFractionDigits: 0}) :
   Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
+const UNIT = { yld: ["bp", 1], fg: ["p", 1] };  // change suffix + decimals per kind (default %, 2)
 const fmtChg = (v, kind) => {
   if (v == null) return `<span class="chg flat">–</span>`;
   const cls = v > 0 ? "up" : v < 0 ? "down" : "flat";
-  const s = (v > 0 ? "+" : "") + v.toFixed(kind === "yld" ? 1 : 2) + (kind === "yld" ? "bp" : "%");
+  const [suf, dec] = UNIT[kind] || ["%", 2];
+  const s = (v > 0 ? "+" : "") + v.toFixed(dec) + suf;
   return `<span class="chg ${cls}">${s}</span>`;
 };
 const fmtMcap = v => v == null ? "–" : v >= 1e12 ? (v/1e12).toFixed(2) + "T" : (v/1e9).toFixed(0) + "B";
@@ -131,7 +136,7 @@ function renderMacro(macro, asof) {
       <div class="hdr"><span></span><span>Close</span><span>Day</span><span>1M</span></div>
       ${items.map(it => `
         <div class="row">
-          <span class="n">${it.chart ? `<a class="t" href="stock.html?t=${encodeURIComponent(it.symbol)}">${it.name}</a>` : it.name}${it.asof && it.asof !== asof ? `<small>${it.asof.slice(5)}</small>` : ""}</span>
+          <span class="n">${it.chart ? `<a class="t" href="stock.html?t=${encodeURIComponent(it.symbol)}">${it.name}</a>` : it.name}${it.rating ? `<small class="rt">${it.rating}</small>` : ""}${it.asof && it.asof !== asof ? `<small>${it.asof.slice(5)}</small>` : ""}</span>
           <span class="v">${fmtNum(it.close, it.kind)}</span>
           ${fmtChg(it.day, it.kind)}${fmtChg(it.m1, it.kind)}
         </div>`).join("")}
