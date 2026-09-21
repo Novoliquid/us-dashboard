@@ -189,10 +189,24 @@ def write_line(symbol: str, s: pd.Series) -> None:
         {"symbol": symbol, "asof": bars[-1][0], "type": "line", "cols": ["date", "c"], "bars": bars}))
 
 
-def fng_series() -> tuple[dict[str, pd.Series], dict[str, str]]:
-    """Fear & Greed daily scores (0-100) keyed by UTC date, plus the source's own rating label for the latest value.
+def fng_hist(s: pd.Series) -> dict:
+    """Readings shown on the gauge card: previous close, 1 week / 1 month / 1 year ago (last value on or before)."""
+    s = s.dropna()
+    asof = s.index[-1]
+
+    def at(ts: pd.Timestamp):
+        ref = s[s.index <= ts]
+        return round(float(ref.iloc[-1]), 1) if len(ref) else None
+
+    return {"prev_close": round(float(s.iloc[-2]), 1) if len(s) > 1 else None,
+            "w1": at(asof - pd.Timedelta(days=7)), "m1": at(months_ago(asof, 1)), "y1": at(months_ago(asof, 12))}
+
+
+def fng_series() -> tuple[dict[str, pd.Series], dict[str, dict]]:
+    """Fear & Greed daily scores (0-100) keyed by UTC date, plus per-symbol extras for the gauge card:
+    {"rating": source's label for the latest value, "hist": {prev_close, w1, m1, y1}}.
     CNN only serves ~1Y, so it is merged with what we wrote before; alternative.me serves the full history."""
-    series, ratings = {}, {}
+    series, extra = {}, {}
     try:
         r = requests.get(FNG_CNN, headers=BROWSER, timeout=30)
         r.raise_for_status()
@@ -203,7 +217,10 @@ def fng_series() -> tuple[dict[str, pd.Series], dict[str, str]]:
         if prev is not None:
             s = pd.concat([prev, s])
         series["FNG:STOCK"] = s[~s.index.duplicated(keep="last")].sort_index()
-        ratings["FNG:STOCK"] = j["fear_and_greed"]["rating"].title()
+        fg = j["fear_and_greed"]  # use CNN's own comparison readings so the card matches the site
+        extra["FNG:STOCK"] = {"rating": fg["rating"].title(), "hist": {
+            "prev_close": round(float(fg["previous_close"]), 1), "w1": round(float(fg["previous_1_week"]), 1),
+            "m1": round(float(fg["previous_1_month"]), 1), "y1": round(float(fg["previous_1_year"]), 1)}}
     except Exception as e:
         print(f"FNG CNN failed: {e}", file=sys.stderr)
     try:
@@ -211,11 +228,12 @@ def fng_series() -> tuple[dict[str, pd.Series], dict[str, str]]:
         r.raise_for_status()
         data = r.json()["data"]
         s = pd.Series({pd.Timestamp(datetime.fromtimestamp(int(p["timestamp"]), tz=timezone.utc).date()): float(p["value"]) for p in data})
-        series["FNG:CRYPTO"] = s[~s.index.duplicated(keep="last")].sort_index()
-        ratings["FNG:CRYPTO"] = data[0]["value_classification"]
+        s = s[~s.index.duplicated(keep="last")].sort_index()
+        series["FNG:CRYPTO"] = s
+        extra["FNG:CRYPTO"] = {"rating": data[0]["value_classification"], "hist": fng_hist(s)}
     except Exception as e:
         print(f"FNG alternative.me failed: {e}", file=sys.stderr)
-    return series, ratings
+    return series, extra
 
 
 def jgb_series() -> dict[str, pd.Series]:
@@ -263,7 +281,7 @@ def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFr
         closes.update(jgb_series())
     except Exception as e:
         print(f"JGB fetch failed: {e}", file=sys.stderr)
-    fng, ratings = fng_series()
+    fng, fng_extra = fng_series()
     closes.update(fng)
     prev_items = {it["symbol"]: it for grp in (prev or {}).get("macro", {}).values() for it in grp}
     result, missing = {}, []
@@ -280,8 +298,7 @@ def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFr
                 missing.append(sym)
                 st = {"close": None, "day": None, "m1": None, "asof": None}
             item = {"name": label, "symbol": sym, "kind": kind, "chart": sym in closes and not sym.startswith("JGB:"), **st}
-            if sym in ratings:
-                item["rating"] = ratings[sym]
+            item.update(fng_extra.get(sym, {}))  # rating + hist for the gauge card
             result[grp].append(item)
     return result, missing, ohlc, fng
 

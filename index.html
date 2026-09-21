@@ -51,6 +51,32 @@
   .hdr span:nth-child(n+2) { text-align: right; min-width: 58px; }
   .hdr span:nth-child(2) { min-width: 56px; }
 
+  /* Fear & Greed gauge card */
+  .card.fg h2 { display: flex; align-items: baseline; gap: 8px; }
+  .card.fg h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .card.fg h2 .r, .fgc .r { margin-left: auto; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; white-space: nowrap; flex: none; }
+  .fgc .ct { flex: 1 1 auto; min-width: 0; }
+  .gauge { display: block; width: 100%; max-width: 320px; margin: 0 auto; overflow: visible; }
+  .gauge .band { fill: none; stroke: var(--line); }
+  .gauge .band.on { stroke: var(--text-2); }
+  .gauge .tick { stroke: var(--card); stroke-width: 2; }
+  .gauge .lab { fill: var(--text-3); font-size: 8.5px; font-weight: 600; letter-spacing: .04em; }
+  .gauge .needle { stroke: var(--text); stroke-width: 3; stroke-linecap: round; }
+  .gauge .pivot { fill: var(--text); }
+  .gauge .score { fill: var(--text); font-size: 34px; font-weight: 700; text-anchor: middle; }
+  .gauge .score.sm { font-size: 18px; }
+  .gauge .rt { fill: var(--text-2); font-size: 12px; font-weight: 600; text-anchor: middle; letter-spacing: .04em; text-transform: uppercase; }
+  .frs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 6px 0 10px; }
+  .fr { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 12px; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--line-2); }
+  .fr span { color: var(--text-3); } .fr b { font-size: 15px; text-align: right; }
+  .fr i { grid-column: 1 / -1; font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+  .fr i.b0, .fr i.b1 { color: var(--down); } .fr i.b3, .fr i.b4 { color: var(--up); }
+  .fgc { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .fgc > div:first-child { width: 96px; flex: none; }
+  .fgc .ct { font-size: 13px; line-height: 1.35; } .fgc .ct .rt { color: var(--text-2); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
+  .fgc .ct small { display: block; color: var(--text-3); font-size: 11px; margin-top: 2px; }
+  .fgn { color: var(--text-3); font-size: 11px; margin-top: 8px; }
+
   /* sectors */
   .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
   .tools h2 { font-size: 16px; margin: 0; flex: 1 1 auto; }
@@ -129,9 +155,45 @@ const fmtChg = (v, kind) => {
 };
 const fmtMcap = v => v == null ? "–" : v >= 1e12 ? (v/1e12).toFixed(2) + "T" : (v/1e9).toFixed(0) + "B";
 
+// Fear & Greed gauge, CNN style: semicircular dial 0→100 with five bands, needle, score, and comparison readings
+const FG_BANDS = [[0, 25, "Extreme Fear"], [25, 45, "Fear"], [45, 55, "Neutral"], [55, 75, "Greed"], [75, 100, "Extreme Greed"]];
+const fgIdx = v => { const i = FG_BANDS.findIndex(([, hi]) => v < hi); return i < 0 ? 4 : i; };
+const fgRating = v => v == null ? "–" : FG_BANDS[fgIdx(v)][2];
+function gaugeSVG(score, rating, { w = 300, labels = true } = {}) {
+  const cx = w / 2, r = w * 0.34, sw = r * 0.24, cy = r + sw / 2 + (labels ? 26 : 8), h = cy + (labels ? 62 : 30);
+  const P = (v, rad) => { const a = Math.PI * (1 - v / 100); return [cx + rad * Math.cos(a), cy - rad * Math.sin(a)]; };
+  const arc = (a, b, rad) => { const [x1, y1] = P(a, rad), [x2, y2] = P(b, rad); return `M${x1.toFixed(1)} ${y1.toFixed(1)}A${rad} ${rad} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`; };
+  const ai = score == null ? -1 : fgIdx(score);
+  const bands = FG_BANDS.map(([a, b, t], i) => `<path d="${arc(a + 0.8, b - 0.8, r)}" class="band ${i === ai ? "on" : ""}" stroke-width="${sw}"/>`).join("");
+  // band labels ride the outside of the arc; the two extremes sit under the arc ends (as on CNN) so they never clip
+  const labs = labels ? FG_BANDS.map(([a, b, t], i) => {
+    if (i === 0 || i === 4) { const [x] = P(i === 0 ? 0 : 100, r + sw / 2); return `<text x="${x.toFixed(1)}" y="${cy + 14}" class="lab" text-anchor="${i === 0 ? "start" : "end"}">${t.toUpperCase()}</text>`; }
+    const [x, y] = P((a + b) / 2, r + sw / 2 + 10), v = (a + b) / 2;
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="lab" text-anchor="${v < 50 ? "end" : v > 50 ? "start" : "middle"}" dominant-baseline="${v === 50 ? "auto" : "middle"}">${t.toUpperCase()}</text>`; }).join("") : "";
+  const tick = v => { const [x1, y1] = P(v, r - sw / 2 - 2), [x2, y2] = P(v, r + sw / 2 + 2); return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="tick"/>`; };
+  let needle = "";
+  if (score != null) { const [x, y] = P(score, r + sw / 2 - 2); needle = `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" class="needle"/><circle cx="${cx}" cy="${cy}" r="${sw * 0.28}" class="pivot"/>`; }
+  const num = labels ? `<text x="${cx}" y="${cy + 40}" class="score">${score == null ? "–" : Math.round(score)}</text><text x="${cx}" y="${cy + 56}" class="rt">${rating || fgRating(score)}</text>`
+                     : `<text x="${cx}" y="${cy + 22}" class="score sm">${score == null ? "–" : Math.round(score)}</text>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="gauge">${bands}${[25, 45, 55, 75].map(tick).join("")}${labs}${needle}${num}</svg>`;
+}
+function fgCard(items) {
+  const stock = items.find(i => i.symbol === "FNG:STOCK") || {}, crypto = items.find(i => i.symbol === "FNG:CRYPTO") || {};
+  const H = stock.hist || {};
+  const reading = (t, v) => `<div class="fr"><span>${t}</span><b>${v == null ? "–" : Math.round(v)}</b><i class="${v == null ? "" : "b" + fgIdx(v)}">${fgRating(v)}</i></div>`;
+  const link = it => it.chart ? `<a class="t" href="stock.html?t=${encodeURIComponent(it.symbol)}">추이</a>` : "";
+  return `<div class="card fg"><h2>Fear &amp; Greed <small>CNN · 미국 주식</small><span class="r">${link(stock)}</span></h2>
+    ${gaugeSVG(stock.close, stock.rating)}
+    <div class="frs">${reading("Previous close", H.prev_close)}${reading("1 week ago", H.w1)}${reading("1 month ago", H.m1)}${reading("1 year ago", H.y1)}</div>
+    <div class="fgc"><div>${gaugeSVG(crypto.close, crypto.rating, { w: 96, labels: false })}</div>
+      <div class="ct"><b>Crypto</b> <span class="rt">${crypto.rating || fgRating(crypto.close)}</span><small>alternative.me · 전일 ${fmtChg(crypto.day, "fg")} · 1M ${fmtChg(crypto.m1, "fg")}</small></div><span class="r">${link(crypto)}</span></div>
+    <div class="fgn">기준 ${stock.asof || "–"} UTC</div>
+  </div>`;
+}
+
 function renderMacro(macro, asof) {
   const el = document.getElementById("macro");
-  el.innerHTML = Object.entries(macro).map(([grp, items]) => `
+  el.innerHTML = Object.entries(macro).map(([grp, items]) => grp === "Fear & Greed" ? fgCard(items) : `
     <div class="card"><h2>${grp}</h2>
       <div class="hdr"><span></span><span>Close</span><span>Day</span><span>1M</span></div>
       ${items.map(it => `
