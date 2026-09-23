@@ -35,6 +35,7 @@ MACRO = {
         ("S&P 500", "^GSPC", "px"),
         ("Nasdaq", "^IXIC", "px"),
         ("Russell 2000", "^RUT", "px"),
+        ("SOX (반도체)", "^SOX", "px"),
     ],
     "Commodities": [
         ("Gold", "GC=F", "px"),
