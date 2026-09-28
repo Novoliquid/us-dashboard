@@ -88,6 +88,9 @@
   .tg.j { color: var(--down); background: var(--down-bg); }
   .tg.f { color: var(--badge); background: rgba(201,133,0,.14); }
   .tg.g { color: var(--text-3); background: var(--line-2); }
+  .tg.pre { color: var(--text-3); background: var(--line-2); }
+  .tg.post { color: var(--badge); background: rgba(201,133,0,.14); }
+  .ce b.u { color: var(--up); } .ce b.d { color: var(--down); }
 
   /* sectors */
   .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
@@ -220,7 +223,29 @@ function calCard(cal) {
     ${rows}<div class="fgn">컨센서스는 발표 며칠 전부터 채워집니다</div></div>`;
 }
 
-function renderMacro(macro, asof, cal) {
+// Next S&P 500 reports, soonest first; consensus EPS tinted against the year-ago quarter
+function ernCard(ern) {
+  const ev = ern?.events || [];
+  if (!ev.length) return "";
+  const num = s => s == null ? null : parseFloat(s.replace("−", "-"));
+  let day = "", rows = "";
+  for (const e of ev) {
+    if (e.date !== day) {
+      day = e.date;
+      const wd = WD[new Date(e.date + "T12:00:00Z").getUTCDay()];
+      rows += `<div class="cd">${e.date.slice(5).replace("-", "/")} (${wd})<span>D-${e.dday}</span></div>`;
+    }
+    const a = num(e.eps), b = num(e.eps_ly);
+    const cls = a == null || b == null ? "" : a > b ? "u" : a < b ? "d" : "";
+    rows += `<div class="ce"><span class="tg ${e.when === "장후" ? "post" : "pre"}">${e.when}</span>`
+          + `<span class="cn"><a class="t" href="stock.html?t=${e.ticker}">${e.ticker}</a> <em>${e.name}</em></span>`
+          + `<b class="${cls}">${e.eps ?? "–"}</b><i>${e.eps_ly ?? "–"}</i></div>`;
+  }
+  return `<div class="card cal"><h2>S&amp;P 500 실적 <small>발표 임박순</small><span class="r">예상 EPS · 전년</span></h2>
+    ${rows}<div class="fgn">시점은 미국 현지 기준 · 예상 EPS는 컨센서스</div></div>`;
+}
+
+function renderMacro(macro, asof, cal, ern) {
   const el = document.getElementById("macro");
   el.innerHTML = Object.entries(macro).map(([grp, items]) => grp === "Fear & Greed" ? fgCard(items) : `
     <div class="card"><h2>${grp}</h2>
@@ -231,7 +256,7 @@ function renderMacro(macro, asof, cal) {
           <span class="v">${fmtNum(it.close, it.kind)}</span>
           ${fmtChg(it.day, it.kind)}${fmtChg(it.m1, it.kind)}
         </div>`).join("")}
-    </div>`).join("") + calCard(cal);
+    </div>`).join("") + calCard(cal) + ernCard(ern);
 }
 
 let sortKey = "mcap", sortAsc = false;
@@ -297,14 +322,14 @@ function applyFilter() {
 
 async function main() {
   const t = Date.now();
-  const [r, rc] = await Promise.all([fetch("data/latest.json?" + t), fetch("data/calendar.json?" + t).catch(() => null)]);
+  const grab = async u => { try { const x = await fetch(u); return x.ok ? await x.json() : null; } catch { return null; } };
+  const [r, cal, ern] = await Promise.all([fetch("data/latest.json?" + t), grab("data/calendar.json?" + t), grab("data/earnings.json?" + t)]);
   const d = await r.json();
-  const cal = rc && rc.ok ? await rc.json().catch(() => null) : null;
   const ageDays = (Date.now() - new Date(d.updated_kst.replace(" ", "T") + "+09:00")) / 864e5;
   document.getElementById("meta").textContent = `기준 ${d.asof} (US) · 갱신 ${d.updated_kst} KST`;
   document.getElementById("stale").hidden = ageDays < 4;
   document.getElementById("cnt").textContent = `${d.stocks.length} 종목`;
-  renderMacro(d.macro, d.asof, cal);
+  renderMacro(d.macro, d.asof, cal, ern);
   renderAll(d.stocks);
   document.getElementById("q").addEventListener("input", applyFilter);
   document.getElementById("expand").onclick = () => document.querySelectorAll("#sectors details").forEach(x => x.open = true);

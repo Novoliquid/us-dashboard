@@ -92,7 +92,10 @@ CAL_WATCH = [
 ]
 CAL_DAYS = 31      # how far ahead to look
 CAL_MAX = 12       # rows kept on the card; lowest-priority tiers drop first
+ERN_DAYS = 40      # earnings look-ahead; the first S&P 500 names can be a couple of weeks out
+ERN_MAX = 12
 NQ_CAL = "https://api.nasdaq.com/api/calendar/economicevents?date={d}"
+NQ_ERN = "https://api.nasdaq.com/api/calendar/earnings?date={d}"
 FOMC_CAL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 ET = ZoneInfo("America/New_York")
 
@@ -412,6 +415,51 @@ def build_calendar() -> dict:
     return {"updated_kst": now.strftime("%Y-%m-%d %H:%M"), "events": ev}
 
 
+def _usd(v) -> str | None:
+    """Nasdaq writes EPS as '$1.36' / '($0.04)' / '' ."""
+    s = (v or "").replace("&nbsp;", "").strip()
+    if not s or s in ("N/A", "$0.00"):
+        return None
+    neg = s.startswith("(")
+    s = s.strip("()").lstrip("$")
+    return ("−" if neg else "") + s
+
+
+def build_earnings(tickers: set[str]) -> dict:
+    """data/earnings.json: the next S&P 500 reports, soonest first, with the consensus EPS.
+    Unlike the economic endpoint this one is not date-shifted (weekends and holidays come back empty)."""
+    today = datetime.now(KST).date()
+    out = []
+    for i in range(ERN_DAYS + 1):
+        if len(out) >= ERN_MAX:
+            break
+        d = today + timedelta(days=i)
+        try:
+            r = requests.get(NQ_ERN.format(d=d.isoformat()), headers=BROWSER | {"Referer": "https://www.nasdaq.com/"}, timeout=20)
+            rows = ((r.json().get("data") or {}).get("rows")) or []
+        except Exception as e:
+            print(f"earnings {d}: {e}", file=sys.stderr)
+            continue
+        day = [x for x in rows if (x.get("symbol") or "").strip() in tickers]
+        day.sort(key=lambda x: -_mcap(x.get("marketCap")))
+        for x in day:
+            out.append({
+                "date": d.isoformat(), "dday": (d - today).days,
+                "ticker": x["symbol"].strip(), "name": (x.get("name") or "").strip(),
+                "when": {"time-pre-market": "장전", "time-after-hours": "장후"}.get(x.get("time"), "–"),
+                "eps": _usd(x.get("epsForecast")), "eps_ly": _usd(x.get("lastYearEPS")),
+                "fq": (x.get("fiscalQuarterEnding") or "").strip(),
+            })
+    return {"updated_kst": datetime.now(KST).strftime("%Y-%m-%d %H:%M"), "events": out[:ERN_MAX]}
+
+
+def _mcap(s) -> float:
+    try:
+        return float((s or "").replace("$", "").replace(",", ""))
+    except ValueError:
+        return 0.0
+
+
 def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series]]:
     """prev = previous latest.json payload; the non-Yahoo feeds (JGB, FRED, Fear & Greed) fall back to it when a source is down."""
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith(EXTERNAL)]
@@ -537,13 +585,15 @@ def main() -> int:
     HIST.mkdir(exist_ok=True)
     latest.write_text(json.dumps(payload, ensure_ascii=False))
     (HIST / f"{asof}.json").write_text(json.dumps(payload, ensure_ascii=False))
-    try:  # best-effort: keep the previous calendar if the sources are down
-        cal = build_calendar()
-        if cal["events"]:
-            (DATA / "calendar.json").write_text(json.dumps(cal, ensure_ascii=False))
-        print(f"calendar events={len(cal['events'])}")
-    except Exception as e:
-        print(f"calendar failed, keeping previous: {e}", file=sys.stderr)
+    for name, build in (("calendar", build_calendar),  # best-effort: keep the previous file if a source is down
+                        ("earnings", lambda: build_earnings({s["ticker"] for s in stocks}))):
+        try:
+            d = build()
+            if d["events"]:
+                (DATA / f"{name}.json").write_text(json.dumps(d, ensure_ascii=False))
+            print(f"{name} events={len(d['events'])}")
+        except Exception as e:
+            print(f"{name} failed, keeping previous: {e}", file=sys.stderr)
     n_post = sum(1 for x in stocks if x["post"] is not None)
     print(f"OK asof={asof} stocks={len(stocks)} post={n_post} missing_stocks={s_missing} updated={payload['updated_kst']}")
     return 0
