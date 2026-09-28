@@ -1,5 +1,5 @@
 {
- "updated": "2026-09-14T02:03:27.143766+00:00",
+ "updated": "2026-09-28T06:06:32.216596+00:00",
  "count": 503,
  "rows": [
   {
@@ -56,7 +56,7 @@
    "name": "AES Corporation",
    "sector": "Utilities",
    "industry": "Independent Power Producers & Energy Traders",
-   "shares": 713157713
+   "shares": 713438630
   },
   {
    "ticker": "AFL",
@@ -70,7 +70,7 @@
    "name": "Agilent Technologies",
    "sector": "Health Care",
    "industry": "Life Sciences Tools & Services",
-   "shares": 281928854
+   "shares": 281965813
   },
   {
    "ticker": "APD",
@@ -308,7 +308,7 @@
    "name": "Archer Daniels Midland",
    "sector": "Consumer Staples",
    "industry": "Agricultural Products & Services",
-   "shares": 481956527
+   "shares": 481959583
   },
   {
    "ticker": "ARES",
@@ -364,14 +364,14 @@
    "name": "Automatic Data Processing",
    "sector": "Industrials",
    "industry": "Human Resource & Employment Services",
-   "shares": 397262737
+   "shares": 396251548
   },
   {
    "ticker": "AZO",
    "name": "AutoZone",
    "sector": "Consumer Discretionary",
    "industry": "Automotive Retail",
-   "shares": 16325355
+   "shares": 16173000
   },
   {
    "ticker": "AVY",
@@ -472,6 +472,13 @@
    "shares": 600795000
   },
   {
+   "ticker": "BE",
+   "name": "Bloom Energy",
+   "sector": "Industrials",
+   "industry": "Electrical Components & Equipment",
+   "shares": 294527346
+  },
+  {
    "ticker": "BNY",
    "name": "BNY Mellon",
    "sector": "Financials",
@@ -490,7 +497,7 @@
    "name": "Booking Holdings",
    "sector": "Consumer Discretionary",
    "industry": "Hotels, Resorts & Cruise Lines",
-   "shares": 774878436
+   "shares": 751380500
   },
   {
    "ticker": "BSX",
@@ -518,7 +525,7 @@
    "name": "Broadridge Financial Solutions",
    "sector": "Industrials",
    "industry": "Data Processing & Outsourced Services",
-   "shares": 115658297
+   "shares": 114021798
   },
   {
    "ticker": "BRO",
@@ -533,13 +540,6 @@
    "sector": "Consumer Staples",
    "industry": "Distillers & Vintners",
    "shares": 458864265
-  },
-  {
-   "ticker": "BLDR",
-   "name": "Builders FirstSource",
-   "sector": "Industrials",
-   "industry": "Building Products",
-   "shares": 107596457
   },
   {
    "ticker": "BG",
@@ -581,14 +581,14 @@
    "name": "Capital One",
    "sector": "Financials",
    "industry": "Consumer Finance",
-   "shares": 613500000
+   "shares": 613484836
   },
   {
    "ticker": "CAH",
    "name": "Cardinal Health",
    "sector": "Health Care",
    "industry": "Health Care Distributors",
-   "shares": 232575728
+   "shares": 231559345
   },
   {
    "ticker": "CCL",
@@ -602,7 +602,7 @@
    "name": "Carrier Global",
    "sector": "Industrials",
    "industry": "Building Products",
-   "shares": 830580423
+   "shares": 824325057
   },
   {
    "ticker": "CVNA",
@@ -693,7 +693,7 @@
    "name": "Charter Communications",
    "sector": "Communication Services",
    "industry": "Cable & Satellite",
-   "shares": 119277493
+   "shares": 114457597
   },
   {
    "ticker": "CVX",
@@ -707,7 +707,7 @@
    "name": "Chipotle Mexican Grill",
    "sector": "Consumer Discretionary",
    "industry": "Restaurants",
-   "shares": 1265418000
+   "shares": 1267838000
   },
   {
    "ticker": "CB",
@@ -749,7 +749,7 @@
    "name": "Cintas",
    "sector": "Industrials",
    "industry": "Diversified Support Services",
-   "shares": 400169561
+   "shares": 399517000
   },
   {
    "ticker": "CSCO",
@@ -791,7 +791,7 @@
    "name": "CMS Energy",
    "sector": "Utilities",
    "industry": "Multi-Utilities",
-   "shares": 308919602
+   "shares": 313577136
   },
   {
    "ticker": "KO",
@@ -805,7 +805,7 @@
    "name": "Cognizant",
    "sector": "Information Technology",
    "industry": "IT Consulting & Other Services",
-   "shares": 473000000
+   "shares": 450444209
   },
   {
    "ticker": "COHR",
@@ -882,14 +882,14 @@
    "name": "Copart",
    "sector": "Industrials",
    "industry": "Diversified Support Services",
-   "shares": 963308388
+   "shares": 925811482
   },
   {
    "ticker": "GLW",
    "name": "Corning Inc.",
    "sector": "Information Technology",
    "industry": "Electronic Components",
-   "shares": 859637825
+   "shares": 861388331
   },
   {
    "ticker": "CPAY",
@@ -917,7 +917,7 @@
    "name": "Costco",
    "sector": "Consumer Staples",
    "industry": "Consumer Staples Merchandise Retail",
-   "shares": 443478804
+   "shares": 443266000
   },
   {
    "ticker": "CRH",
@@ -1078,7 +1078,7 @@
    "name": "DoorDash",
    "sector": "Consumer Discretionary",
    "industry": "Specialized Consumer Services",
-   "shares": 433297937
+   "shares": 433295654
   },
   {
    "ticker": "DOV",
@@ -1127,7 +1127,7 @@
    "name": "Eaton Corporation",
    "sector": "Industrials",
    "industry": "Electrical Components & Equipment",
-   "shares": 388300000
+   "shares": 388400000
   },
   {
    "ticker": "EBAY",
@@ -1141,7 +1141,7 @@
    "name": "EchoStar",
    "sector": "Communication Services",
    "industry": "Wireless Telecommunication Services",
-   "shares": 290490708
+   "shares": 290815844
   },
   {
    "ticker": "ECL",
@@ -1162,7 +1162,7 @@
    "name": "Edwards Lifesciences",
    "sector": "Health Care",
    "industry": "Health Care Equipment",
-   "shares": 575800000
+   "shares": 576400000
   },
   {
    "ticker": "ELV",
@@ -1197,7 +1197,7 @@
    "name": "EOG Resources",
    "sector": "Energy",
    "industry": "Oil & Gas Exploration & Production",
-   "shares": 532628530
+   "shares": 524529176
   },
   {
    "ticker": "EQT",
@@ -1232,14 +1232,14 @@
    "name": "Essex Property Trust",
    "sector": "Real Estate",
    "industry": "Multi-Family Residential REITs",
-   "shares": 64261739
+   "shares": 64268439
   },
   {
    "ticker": "EL",
    "name": "Estée Lauder Companies (The)",
    "sector": "Consumer Staples",
    "industry": "Personal Care Products",
-   "shares": 361794915
+   "shares": 361798567
   },
   {
    "ticker": "EG",
@@ -1254,6 +1254,13 @@
    "sector": "Utilities",
    "industry": "Electric Utilities",
    "shares": 230567172
+  },
+  {
+   "ticker": "P",
+   "name": "Everpure",
+   "sector": "Information Technology",
+   "industry": "Technology Hardware, Storage & Peripherals",
+   "shares": 333227251
   },
   {
    "ticker": "ES",
@@ -1274,7 +1281,7 @@
    "name": "Expand Energy",
    "sector": "Energy",
    "industry": "Oil & Gas Exploration & Production",
-   "shares": 239228849
+   "shares": 231503789
   },
   {
    "ticker": "EXPE",
@@ -1337,7 +1344,7 @@
    "name": "Federal Realty Investment Trust",
    "sector": "Real Estate",
    "industry": "Retail REITs",
-   "shares": 86389197
+   "shares": 86889133
   },
   {
    "ticker": "FDX",
@@ -1372,7 +1379,7 @@
    "name": "Fifth Third Bancorp",
    "sector": "Financials",
    "industry": "Regional Banks",
-   "shares": 906573000
+   "shares": 906892564
   },
   {
    "ticker": "FSLR",
@@ -1386,7 +1393,7 @@
    "name": "FirstEnergy",
    "sector": "Utilities",
    "industry": "Electric Utilities",
-   "shares": 578431175
+   "shares": 578639932
   },
   {
    "ticker": "FISV",
@@ -1421,21 +1428,21 @@
    "name": "Fortive",
    "sector": "Industrials",
    "industry": "Industrial Machinery & Supplies & Components",
-   "shares": 304861021
+   "shares": 302017052
   },
   {
    "ticker": "FOXA",
    "name": "Fox Corporation (Class A)",
    "sector": "Communication Services",
    "industry": "Broadcasting",
-   "shares": 420437476
+   "shares": 421673622
   },
   {
    "ticker": "FOX",
    "name": "Fox Corporation (Class B)",
    "sector": "Communication Services",
    "industry": "Broadcasting",
-   "shares": 420437476
+   "shares": 421673622
   },
   {
    "ticker": "BEN",
@@ -1498,7 +1505,7 @@
    "name": "Generac",
    "sector": "Industrials",
    "industry": "Heavy Electrical Equipment",
-   "shares": 59005639
+   "shares": 59063935
   },
   {
    "ticker": "GD",
@@ -1512,7 +1519,7 @@
    "name": "General Mills",
    "sector": "Consumer Staples",
    "industry": "Packaged Foods & Meats",
-   "shares": 534629472
+   "shares": 534687144
   },
   {
    "ticker": "GM",
@@ -1547,7 +1554,7 @@
    "name": "Globe Life",
    "sector": "Financials",
    "industry": "Life & Health Insurance",
-   "shares": 77644761
+   "shares": 76849447
   },
   {
    "ticker": "GDDY",
@@ -1603,7 +1610,7 @@
    "name": "Henry Schein",
    "sector": "Health Care",
    "industry": "Health Care Distributors",
-   "shares": 113916757
+   "shares": 111446542
   },
   {
    "ticker": "HSY",
@@ -1732,6 +1739,13 @@
    "shares": 284800000
   },
   {
+   "ticker": "ILMN",
+   "name": "Illumina, Inc.",
+   "sector": "Health Care",
+   "industry": "Life Sciences Tools & Services",
+   "shares": 151000000
+  },
+  {
    "ticker": "INCY",
    "name": "Incyte",
    "sector": "Health Care",
@@ -1757,7 +1771,7 @@
    "name": "Intel",
    "sector": "Information Technology",
    "industry": "Semiconductors",
-   "shares": 5286105262
+   "shares": 5254526315
   },
   {
    "ticker": "IBKR",
@@ -1778,7 +1792,7 @@
    "name": "International Flavors & Fragrances",
    "sector": "Materials",
    "industry": "Specialty Chemicals",
-   "shares": 255303473
+   "shares": 255149963
   },
   {
    "ticker": "IP",
@@ -1834,7 +1848,7 @@
    "name": "J.B. Hunt",
    "sector": "Industrials",
    "industry": "Cargo Ground Transportation",
-   "shares": 93900000
+   "shares": 93914939
   },
   {
    "ticker": "JBL",
@@ -1855,7 +1869,7 @@
    "name": "Jacobs Solutions",
    "sector": "Industrials",
    "industry": "Construction & Engineering",
-   "shares": 118080879
+   "shares": 117038611
   },
   {
    "ticker": "JNJ",
@@ -1939,7 +1953,7 @@
    "name": "KLA Corporation",
    "sector": "Information Technology",
    "industry": "Semiconductor Materials & Equipment",
-   "shares": 1306546783
+   "shares": 1305006492
   },
   {
    "ticker": "KHC",
@@ -1953,7 +1967,7 @@
    "name": "Kroger",
    "sector": "Consumer Staples",
    "industry": "Food Retail",
-   "shares": 596000000
+   "shares": 590588700
   },
   {
    "ticker": "LHX",
@@ -1974,7 +1988,7 @@
    "name": "Lam Research",
    "sector": "Information Technology",
    "industry": "Semiconductor Materials & Equipment",
-   "shares": 1251321000
+   "shares": 1251424362
   },
   {
    "ticker": "LVS",
@@ -1988,7 +2002,7 @@
    "name": "Leidos",
    "sector": "Industrials",
    "industry": "Diversified Support Services",
-   "shares": 125785466
+   "shares": 125492209
   },
   {
    "ticker": "LEN",
@@ -2044,7 +2058,7 @@
    "name": "Lowe's",
    "sector": "Consumer Discretionary",
    "industry": "Home Improvement Retail",
-   "shares": 561054019
+   "shares": 560707041
   },
   {
    "ticker": "LULU",
@@ -2072,14 +2086,14 @@
    "name": "M&T Bank",
    "sector": "Financials",
    "industry": "Regional Banks",
-   "shares": 144933000
+   "shares": 144416262
   },
   {
    "ticker": "MPC",
    "name": "Marathon Petroleum",
    "sector": "Energy",
    "industry": "Oil & Gas Refining & Marketing",
-   "shares": 291936635
+   "shares": 280824763
   },
   {
    "ticker": "MAR",
@@ -2222,18 +2236,11 @@
    "shares": 399235889
   },
   {
-   "ticker": "TAP",
-   "name": "Molson Coors Beverage Company",
-   "sector": "Consumer Staples",
-   "industry": "Brewers",
-   "shares": 186453933
-  },
-  {
    "ticker": "MDLZ",
    "name": "Mondelez International",
    "sector": "Consumer Staples",
    "industry": "Packaged Foods & Meats",
-   "shares": 1283649766
+   "shares": 1276308057
   },
   {
    "ticker": "MPWR",
@@ -2317,28 +2324,28 @@
    "name": "News Corp (Class A)",
    "sector": "Communication Services",
    "industry": "Publishing",
-   "shares": 536370159
+   "shares": 539619016
   },
   {
    "ticker": "NWS",
    "name": "News Corp (Class B)",
    "sector": "Communication Services",
    "industry": "Publishing",
-   "shares": 536370159
+   "shares": 539619016
   },
   {
    "ticker": "NEE",
    "name": "NextEra Energy",
    "sector": "Utilities",
    "industry": "Multi-Utilities",
-   "shares": 2085605358
+   "shares": 2085978209
   },
   {
    "ticker": "NKE",
    "name": "Nike, Inc.",
    "sector": "Consumer Discretionary",
    "industry": "Apparel, Accessories & Luxury Goods",
-   "shares": 1480887033
+   "shares": 1483498703
   },
   {
    "ticker": "NI",
@@ -2352,7 +2359,7 @@
    "name": "Nordson Corporation",
    "sector": "Industrials",
    "industry": "Industrial Machinery & Supplies & Components",
-   "shares": 55717948
+   "shares": 55699366
   },
   {
    "ticker": "NSC",
@@ -2443,7 +2450,7 @@
    "name": "Omnicom Group",
    "sector": "Communication Services",
    "industry": "Advertising",
-   "shares": 285006196
+   "shares": 274345967
   },
   {
    "ticker": "ON",
@@ -2457,14 +2464,14 @@
    "name": "Oneok",
    "sector": "Energy",
    "industry": "Oil & Gas Storage & Transportation",
-   "shares": 630032852
+   "shares": 630409203
   },
   {
    "ticker": "ORCL",
    "name": "Oracle Corporation",
    "sector": "Information Technology",
    "industry": "Application Software",
-   "shares": 2880471000
+   "shares": 3023736000
   },
   {
    "ticker": "OTIS",
@@ -2506,14 +2513,14 @@
    "name": "Paramount Skydance Corporation",
    "sector": "Communication Services",
    "industry": "Movies & Entertainment",
-   "shares": 1119173058
+   "shares": 1121945779
   },
   {
    "ticker": "PH",
    "name": "Parker Hannifin",
    "sector": "Industrials",
    "industry": "Industrial Machinery & Supplies & Components",
-   "shares": 126047469
+   "shares": 126112415
   },
   {
    "ticker": "PAYX",
@@ -2534,7 +2541,7 @@
    "name": "Pentair",
    "sector": "Industrials",
    "industry": "Industrial Machinery & Supplies & Components",
-   "shares": 161605541
+   "shares": 159600000
   },
   {
    "ticker": "PEP",
@@ -2555,7 +2562,7 @@
    "name": "PG&E Corporation",
    "sector": "Utilities",
    "industry": "Multi-Utilities",
-   "shares": 2202366906
+   "shares": 3002366906
   },
   {
    "ticker": "PM",
@@ -2583,7 +2590,7 @@
    "name": "PNC Financial Services",
    "sector": "Financials",
    "industry": "Diversified Banks",
-   "shares": 399000000
+   "shares": 398943667
   },
   {
    "ticker": "PPG",
@@ -2611,14 +2618,14 @@
    "name": "Procter & Gamble",
    "sector": "Consumer Staples",
    "industry": "Personal Care Products",
-   "shares": 2324433060
+   "shares": 2322672312
   },
   {
    "ticker": "PGR",
    "name": "Progressive Corporation",
    "sector": "Financials",
    "industry": "Property & Casualty Insurance",
-   "shares": 581100000
+   "shares": 580400000
   },
   {
    "ticker": "PLD",
@@ -2639,7 +2646,7 @@
    "name": "Public Service Enterprise Group",
    "sector": "Utilities",
    "industry": "Electric Utilities",
-   "shares": 498321402
+   "shares": 498420030
   },
   {
    "ticker": "PTC",
@@ -2975,7 +2982,7 @@
    "name": "Supermicro",
    "sector": "Information Technology",
    "industry": "Technology Hardware, Storage & Peripherals",
-   "shares": 646873027
+   "shares": 656965384
   },
   {
    "ticker": "SYF",
@@ -2996,7 +3003,7 @@
    "name": "Sysco",
    "sector": "Consumer Staples",
    "industry": "Food Distributors",
-   "shares": 479096016
+   "shares": 479568281
   },
   {
    "ticker": "TMUS",
@@ -3038,14 +3045,14 @@
    "name": "Target Corporation",
    "sector": "Consumer Staples",
    "industry": "Consumer Staples Merchandise Retail",
-   "shares": 454291461
+   "shares": 454296736
   },
   {
    "ticker": "TEL",
    "name": "TE Connectivity",
    "sector": "Information Technology",
    "industry": "Electronic Manufacturing Services",
-   "shares": 289940672
+   "shares": 289513228
   },
   {
    "ticker": "TDY",
@@ -3101,7 +3108,7 @@
    "name": "TJX Companies",
    "sector": "Consumer Discretionary",
    "industry": "Apparel Retail",
-   "shares": 1104704446
+   "shares": 1099974061
   },
   {
    "ticker": "TKO",
@@ -3109,13 +3116,6 @@
    "sector": "Communication Services",
    "industry": "Movies & Entertainment",
    "shares": 73111098
-  },
-  {
-   "ticker": "TTD",
-   "name": "Trade Desk (The)",
-   "sector": "Communication Services",
-   "industry": "Advertising",
-   "shares": 469880194
   },
   {
    "ticker": "TSCO",
@@ -3199,7 +3199,7 @@
    "name": "Ulta Beauty",
    "sector": "Consumer Discretionary",
    "industry": "Other Specialty Retail",
-   "shares": 42757471
+   "shares": 42989311
   },
   {
    "ticker": "UNP",
@@ -3325,7 +3325,7 @@
    "name": "Visa Inc.",
    "sector": "Financials",
    "industry": "Transaction & Payment Processing Services",
-   "shares": 1867047259
+   "shares": 1877355259
   },
   {
    "ticker": "VST",
@@ -3360,7 +3360,7 @@
    "name": "W. W. Grainger",
    "sector": "Industrials",
    "industry": "Industrial Machinery & Supplies & Components",
-   "shares": 47213119
+   "shares": 47100942
   },
   {
    "ticker": "WAB",
@@ -3444,14 +3444,14 @@
    "name": "Weyerhaeuser",
    "sector": "Real Estate",
    "industry": "Timber REITs",
-   "shares": 720736000
+   "shares": 721042609
   },
   {
    "ticker": "WSM",
    "name": "Williams-Sonoma, Inc.",
    "sector": "Consumer Discretionary",
    "industry": "Homefurnishing Retail",
-   "shares": 117768000
+   "shares": 117779173
   },
   {
    "ticker": "WMB",
@@ -3507,7 +3507,7 @@
    "name": "Zebra Technologies",
    "sector": "Information Technology",
    "industry": "Electronic Equipment & Instruments",
-   "shares": 47633392
+   "shares": 47310660
   },
   {
    "ticker": "ZBH",
