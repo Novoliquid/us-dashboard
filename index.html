@@ -70,6 +70,25 @@
   .fr i.b0, .fr i.b1 { color: var(--down); } .fr i.b3, .fr i.b4 { color: var(--up); }
   .fgn { color: var(--text-3); font-size: 11px; margin-top: 8px; }
 
+  /* economic calendar card */
+  .card.cal h2 { display: flex; align-items: baseline; gap: 8px; }
+  .card.cal h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .card.cal h2 .r { margin-left: auto; font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .cd { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--text-2);
+        margin: 8px 0 2px; padding-top: 6px; border-top: 1px solid var(--line-2); }
+  .cd:first-of-type { border-top: 0; padding-top: 0; margin-top: 2px; }
+  .cd span { margin-left: auto; color: var(--text-3); font-weight: 500; }
+  .ce { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 7px; align-items: baseline; padding: 2px 0; font-size: 12.5px; }
+  .ce .cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ce .cn em { font-style: normal; color: var(--text-3); font-size: 11px; margin-right: 2px; }
+  .ce b { text-align: right; min-width: 46px; font-weight: 600; }
+  .ce i { text-align: right; min-width: 46px; font-style: normal; color: var(--text-3); font-size: 11.5px; }
+  .tg { font-size: 9.5px; font-weight: 700; letter-spacing: .02em; padding: 1px 4px; border-radius: 3px; flex: none; }
+  .tg.p { color: var(--up); background: var(--up-bg); }
+  .tg.j { color: var(--down); background: var(--down-bg); }
+  .tg.f { color: var(--badge); background: rgba(201,133,0,.14); }
+  .tg.g { color: var(--text-3); background: var(--line-2); }
+
   /* sectors */
   .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 12px; }
   .tools h2 { font-size: 16px; margin: 0; flex: 1 1 auto; }
@@ -180,7 +199,28 @@ function fgCard(items) {
   </div>`;
 }
 
-function renderMacro(macro, asof) {
+// Upcoming US releases, grouped by day. Consensus stays blank until a few days before the release.
+const CAL_TAG = { "물가": "p", "고용": "j", "연준": "f", "경기": "g" };
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+function calCard(cal) {
+  const ev = cal?.events || [];
+  if (!ev.length) return "";
+  let day = "", rows = "";
+  for (const e of ev) {
+    const [d, t] = e.kst.split(" ");
+    if (d !== day) {
+      day = d;
+      const wd = WD[new Date(d + "T12:00:00Z").getUTCDay()];
+      rows += `<div class="cd">${d.slice(5).replace("-", "/")} (${wd})<span>D-${e.dday}</span></div>`;
+    }
+    rows += `<div class="ce"><span class="tg ${CAL_TAG[e.tag] || "g"}">${e.tag}</span>`
+          + `<span class="cn"><em>${t}</em> ${e.name}</span><b>${e.cons || "–"}</b><i>${e.prev || "–"}</i></div>`;
+  }
+  return `<div class="card cal"><h2>주요 일정 <small>미국 · KST</small><span class="r">예상 · 이전</span></h2>
+    ${rows}<div class="fgn">컨센서스는 발표 며칠 전부터 채워집니다</div></div>`;
+}
+
+function renderMacro(macro, asof, cal) {
   const el = document.getElementById("macro");
   el.innerHTML = Object.entries(macro).map(([grp, items]) => grp === "Fear & Greed" ? fgCard(items) : `
     <div class="card"><h2>${grp}</h2>
@@ -191,7 +231,7 @@ function renderMacro(macro, asof) {
           <span class="v">${fmtNum(it.close, it.kind)}</span>
           ${fmtChg(it.day, it.kind)}${fmtChg(it.m1, it.kind)}
         </div>`).join("")}
-    </div>`).join("");
+    </div>`).join("") + calCard(cal);
 }
 
 let sortKey = "mcap", sortAsc = false;
@@ -256,13 +296,15 @@ function applyFilter() {
 }
 
 async function main() {
-  const r = await fetch("data/latest.json?" + Date.now());
+  const t = Date.now();
+  const [r, rc] = await Promise.all([fetch("data/latest.json?" + t), fetch("data/calendar.json?" + t).catch(() => null)]);
   const d = await r.json();
+  const cal = rc && rc.ok ? await rc.json().catch(() => null) : null;
   const ageDays = (Date.now() - new Date(d.updated_kst.replace(" ", "T") + "+09:00")) / 864e5;
   document.getElementById("meta").textContent = `기준 ${d.asof} (US) · 갱신 ${d.updated_kst} KST`;
   document.getElementById("stale").hidden = ageDays < 4;
   document.getElementById("cnt").textContent = `${d.stocks.length} 종목`;
-  renderMacro(d.macro, d.asof);
+  renderMacro(d.macro, d.asof, cal);
   renderAll(d.stocks);
   document.getElementById("q").addEventListener("input", applyFilter);
   document.getElementById("expand").onclick = () => document.querySelectorAll("#sectors details").forEach(x => x.open = true);

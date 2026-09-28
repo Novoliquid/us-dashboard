@@ -14,7 +14,7 @@ import io
 import json
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -67,6 +67,34 @@ MACRO = {
 EXTERNAL = ("JGB:", "FNG:", "FRED:")  # non-Yahoo symbol prefixes
 OHLC_PERIOD = "37mo"  # 3Y of bars + buffer for the month-ago lookups
 OHLC_YEARS = 3
+
+# Economic calendar: US releases worth watching, as (Nasdaq eventName lowercased, nth row of that name, label, tag).
+# Nasdaq repeats the same eventName for MoM then YoY, so the index picks which one.
+CAL_WATCH = [
+    ("nonfarm payrolls", 0, "비농업 고용", "고용", 1),
+    ("unemployment rate", 0, "실업률", "고용", 1),
+    ("average hourly earnings", 0, "시간당 임금 MoM", "고용", 1),
+    ("adp nonfarm employment change", 0, "ADP 민간고용", "고용", 2),
+    ("jolts job openings", 0, "JOLTS 구인", "고용", 2),
+    ("cpi", 0, "CPI MoM", "물가", 1),
+    ("cpi", 1, "CPI YoY", "물가", 2),
+    ("core cpi", 0, "근원 CPI MoM", "물가", 2),
+    ("core cpi", 1, "근원 CPI YoY", "물가", 1),
+    ("core pce price index", 0, "근원 PCE MoM", "물가", 1),
+    ("core pce price index", 1, "근원 PCE YoY", "물가", 1),
+    ("pce price index", 0, "PCE MoM", "물가", 2),
+    ("ppi", 0, "PPI MoM", "물가", 2),
+    ("core ppi", 0, "근원 PPI MoM", "물가", 2),
+    ("michigan 1-year inflation expectations", 0, "미시간 1년 기대인플레", "물가", 3),
+    ("ism manufacturing pmi", 0, "ISM 제조업", "경기", 3),
+    ("ism non-manufacturing pmi", 0, "ISM 서비스업", "경기", 3),
+    ("retail sales", 0, "소매판매 MoM", "경기", 3),
+]
+CAL_DAYS = 31      # how far ahead to look
+CAL_MAX = 12       # rows kept on the card; lowest-priority tiers drop first
+NQ_CAL = "https://api.nasdaq.com/api/calendar/economicevents?date={d}"
+FOMC_CAL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
+ET = ZoneInfo("America/New_York")
 
 JGB_CUR = "https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv"
 JGB_ALL = "https://www.mof.go.jp/jgbs/reference/interest_rate/data/jgbcm_all.csv"  # lags current month
@@ -292,6 +320,98 @@ def fred_series(ids: list[str]) -> dict[str, pd.Series]:
     return out
 
 
+def _cal_clean(v) -> str | None:
+    """Nasdaq writes an empty cell as '&nbsp;' / blank."""
+    s = (v or "").replace("&nbsp;", "").strip()
+    return s or None
+
+
+def fomc_events(start, end) -> list[dict]:
+    """FOMC decision days and minutes releases from the Fed's own calendar.
+    A meeting row reads e.g. 'October 27-28'; minutes land 21 days after the last day (holds for every 2026 meeting so far)."""
+    import re
+    r = requests.get(FOMC_CAL, headers=UA, timeout=20)
+    r.raise_for_status()
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", r.text))
+    MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    out = []
+    for m in re.finditer(r"(\d{4}) FOMC Meetings(.*?)(?=\d{4} FOMC Meetings|$)", text):
+        year, seg = int(m.group(1)), m.group(2)
+        if not (start.year <= year <= end.year + 1):
+            continue
+        for mm in re.finditer(rf"({'|'.join(MON)})(?:/({'|'.join(MON)}))? (\d{{1,2}})-(\d{{1,2}})\*?", seg):
+            m1, m2, _d1, d2 = mm.group(1), mm.group(2), int(mm.group(3)), int(mm.group(4))
+            last = date(year, MON.index(m2 or m1) + 1, d2)
+            for when, label in ((last, "FOMC 회의 (금리 결정)"), (last + timedelta(days=21), "FOMC 의사록")):
+                if start <= when <= end:
+                    out.append({"date": when.isoformat(), "et": "14:00", "name": label, "tag": "연준", "prio": 0})
+    return out
+
+
+def nasdaq_calendar(start, end) -> list[dict]:
+    """US releases with consensus, one API call per day. Consensus is only published a few days ahead, so it is often blank.
+    The API is off by one: ?date=D returns the releases of D-1 (checked against weekday-fixed prints -- Dallas Fed Mfg is
+    always Monday and lands on ?date=Tuesday, Redbook/JOLTS are Tuesday and land on ?date=Wednesday), so query d+1 for day d.
+    Times in the 'gmt' field are actually ET."""
+    out = []
+    for i in range((end - start).days + 1):
+        d = start + timedelta(days=i)
+        try:
+            r = requests.get(NQ_CAL.format(d=(d + timedelta(days=1)).isoformat()),
+                             headers=BROWSER | {"Referer": "https://www.nasdaq.com/"}, timeout=20)
+            rows = ((r.json().get("data") or {}).get("rows")) or []
+        except Exception as e:
+            print(f"calendar {d}: {e}", file=sys.stderr)
+            continue
+        seen: dict[str, int] = {}
+        picked: dict[tuple[str, int], dict] = {}
+        for x in rows:
+            if x.get("country") != "United States":
+                continue
+            key = (x.get("eventName") or "").strip().lower()
+            n = seen.get(key, 0)
+            seen[key] = n + 1
+            picked[(key, n)] = x
+        for key, n, label, tag, prio in CAL_WATCH:
+            x = picked.get((key, n))
+            if x is None:
+                continue
+            out.append({"date": d.isoformat(), "et": _cal_clean(x.get("gmt")) or "",
+                        "name": label, "tag": tag, "prio": prio,
+                        "cons": _cal_clean(x.get("consensus")), "prev": _cal_clean(x.get("previous"))})
+    return out
+
+
+def build_calendar() -> dict:
+    """data/calendar.json: the next ~month of US macro releases plus Fed events, times in KST."""
+    today = datetime.now(KST).date()
+    end = today + timedelta(days=CAL_DAYS)
+    ev = nasdaq_calendar(today, end)
+    try:
+        ev += fomc_events(today, end)
+    except Exception as e:
+        print(f"FOMC calendar: {e}", file=sys.stderr)
+    now = datetime.now(KST)
+    for e in ev:
+        h, _, mi = (e.get("et") or "").partition(":")
+        try:
+            et = datetime.fromisoformat(e["date"]).replace(hour=int(h), minute=int(mi), tzinfo=ET)
+        except ValueError:
+            et = datetime.fromisoformat(e["date"]).replace(hour=9, tzinfo=ET)
+        k = et.astimezone(KST)
+        e["kst"] = k.strftime("%Y-%m-%d %H:%M")
+        e["dday"] = (k.date() - today).days
+        e["_t"] = k
+    ev = sorted((e for e in ev if e["_t"] > now), key=lambda e: e["_t"])
+    while len(ev) > CAL_MAX:  # trim the least important tier first, keeping chronological order
+        worst = max(e["prio"] for e in ev)
+        drop = next(i for i in range(len(ev) - 1, -1, -1) if ev[i]["prio"] == worst)
+        ev.pop(drop)
+    for e in ev:
+        e.pop("_t")
+    return {"updated_kst": now.strftime("%Y-%m-%d %H:%M"), "events": ev}
+
+
 def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series]]:
     """prev = previous latest.json payload; the non-Yahoo feeds (JGB, FRED, Fear & Greed) fall back to it when a source is down."""
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith(EXTERNAL)]
@@ -417,6 +537,13 @@ def main() -> int:
     HIST.mkdir(exist_ok=True)
     latest.write_text(json.dumps(payload, ensure_ascii=False))
     (HIST / f"{asof}.json").write_text(json.dumps(payload, ensure_ascii=False))
+    try:  # best-effort: keep the previous calendar if the sources are down
+        cal = build_calendar()
+        if cal["events"]:
+            (DATA / "calendar.json").write_text(json.dumps(cal, ensure_ascii=False))
+        print(f"calendar events={len(cal['events'])}")
+    except Exception as e:
+        print(f"calendar failed, keeping previous: {e}", file=sys.stderr)
     n_post = sum(1 for x in stocks if x["post"] is not None)
     print(f"OK asof={asof} stocks={len(stocks)} post={n_post} missing_stocks={s_missing} updated={payload['updated_kst']}")
     return 0
