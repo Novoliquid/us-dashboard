@@ -57,8 +57,12 @@ MACRO = {
         ("JP 30Y", "JGB:30年", "yld"),
     ],
     "Crypto": [
+    # top 5 by market cap, stablecoins skipped (Tether ranks 3rd but is pegged, so it says nothing on a price board)
         ("Bitcoin", "BTC-USD", "px"),
         ("Ethereum", "ETH-USD", "px"),
+        ("BNB", "BNB-USD", "px"),
+        ("XRP", "XRP-USD", "px"),
+        ("Solana", "SOL-USD", "px"),
     ],
     "Fear & Greed": [  # 0-100 sentiment scores; "fg" kind -> changes in points
         ("Stocks (CNN)", "FNG:STOCK", "fg"),
