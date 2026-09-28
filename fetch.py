@@ -44,10 +44,12 @@ MACRO = {
         ("WTI", "CL=F", "px"),
         ("Brent", "BZ=F", "px"),
     ],
-    "Currencies": [
+    "Currencies & Crypto": [
         ("USD/JPY", "JPY=X", "px"),
         ("USD/KRW", "KRW=X", "px"),
         ("Dollar Index", "DX-Y.NYB", "px"),
+        ("Bitcoin", "BTC-USD", "px"),
+        ("Ethereum", "ETH-USD", "px"),
     ],
     "Bonds": [
         ("US 2Y", "FRED:DGS2", "yld"),  # Treasury constant maturity via FRED; posted next business day
@@ -55,14 +57,6 @@ MACRO = {
         ("US 30Y", "^TYX", "yld"),
         ("JP 10Y", "JGB:10年", "yld"),
         ("JP 30Y", "JGB:30年", "yld"),
-    ],
-    "Crypto": [
-    # top 5 by market cap, stablecoins skipped (Tether ranks 3rd but is pegged, so it says nothing on a price board)
-        ("Bitcoin", "BTC-USD", "px"),
-        ("Ethereum", "ETH-USD", "px"),
-        ("BNB", "BNB-USD", "px"),
-        ("XRP", "XRP-USD", "px"),
-        ("Solana", "SOL-USD", "px"),
     ],
     "Fear & Greed": [  # 0-100 sentiment scores; "fg" kind -> changes in points
         ("Stocks (CNN)", "FNG:STOCK", "fg"),
