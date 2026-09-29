@@ -12,6 +12,22 @@ if [[ ! -f data/sp500.json || "$(date +%u)" == "1" ]]; then
   uv run python constituents.py >>"$LOG" 2>&1 || echo "$(ts) constituents refresh failed (kept previous)" >>"$LOG"
 fi
 
+# keep data/fund in step with the index: fundamentals otherwise only refresh weekly, so a new
+# entrant would sit without a file for days. Add the newcomers, drop the leavers.
+NEW=$(python3 - <<'EOF'
+import json, os
+tk = {s["ticker"] for s in json.load(open("data/sp500.json"))["rows"]}
+have = {f[:-5] for f in os.listdir("data/fund") if f.endswith(".json")}
+for t in sorted(have - tk):
+    os.remove(f"data/fund/{t}.json")
+print(" ".join(sorted(tk - have)))
+EOF
+)
+if [[ -n "$NEW" ]]; then
+  echo "$(ts) fund: new constituents $NEW" >>"$LOG"
+  uv run python fund.py ${=NEW} >>"$LOG" 2>&1 || echo "$(ts) fund backfill failed" >>"$LOG"
+fi
+
 if ! uv run python fetch.py >>"$LOG" 2>&1; then
   echo "$(ts) FETCH FAILED" >>"$LOG"
   tail -5 "$LOG"
