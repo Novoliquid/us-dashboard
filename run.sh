@@ -54,6 +54,8 @@ idx = {i["name"]: i for i in d["macro"]["Indices"]}
 def f(x): return f"{x:+.2f}%"
 by = {}
 for s in d["stocks"]:
+    if s.get("ca"):  # unadjusted spin-off/split: not a real move
+        continue
     by.setdefault(s["sector"], []).append(s["day"])
 avg = {k: sum(v)/len(v) for k, v in by.items() if v}
 best = max(avg, key=avg.get); worst = min(avg, key=avg.get)

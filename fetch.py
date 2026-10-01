@@ -62,6 +62,7 @@ MACRO = {
         ("Stocks (CNN)", "FNG:STOCK", "fg"),
     ],
 }
+CA_PCT = 50.0  # |day %| at or above this is treated as an unadjusted corporate action, not a return
 EXTERNAL = ("JGB:", "FNG:", "FRED:")  # non-Yahoo symbol prefixes
 OHLC_PERIOD = "37mo"  # 3Y of bars + buffer for the month-ago lookups
 OHLC_YEARS = 3
@@ -534,8 +535,12 @@ def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]
                 post = float(q["postMarketPrice"])
                 post_chg = round(float(q.get("postMarketChangePercent") or (post / st["close"] - 1) * 100), 2)
                 post_time = t.strftime("%H:%M")
+        # A one-day move this large in an S&P 500 name is a spin-off/split Yahoo has not adjusted yet
+        # (Corteva -84% on its 2026-10-01 Vylor spin-off), not a real return. Flag it so it stays out of averages.
+        ca = st["day"] is not None and abs(st["day"]) >= CA_PCT
         rows.append({**{k: r[k] for k in ("ticker", "name", "sector")}, **st,
-                     "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap})
+                     "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap,
+                     **({"ca": True} if ca else {})})
     # market asof = most common asof date among stocks
     asof = pd.Series([x["asof"] for x in rows]).mode().iloc[0] if rows else None
     return rows, missing, asof, ohlc

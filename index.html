@@ -260,7 +260,8 @@ function renderMacro(macro, asof, cal, ern) {
 }
 
 let sortKey = "mcap", sortAsc = false;
-const avg = (arr, k) => { const v = arr.map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+// rows flagged `ca` carry an unadjusted spin-off/split price, so they are left out of the group averages
+const avg = (arr, k) => { const v = arr.filter(x => !(x.ca && k === "day")).map(x => x[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
 const cmp = (a, b) => {
   const x = a[sortKey], y = b[sortKey];
   if (x == null) return 1; if (y == null) return -1;
@@ -282,7 +283,7 @@ function groupHTML(title, rows, key, isOpen, showSector = false, cls = "sector")
     <div class="tw"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
       <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td title="${r.name}">${r.name}${showSector ? `<span class="sec">${r.sector}</span>` : ""}</td><td>${fmtNum(r.close)}</td>
-      <td>${fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
+      <td>${r.ca ? `<span class="chg flat" title="분할·합병 등 기업행위로 주가가 조정된 날입니다. 실제 등락이 아니라 평균에서 제외했습니다.">기업행위</span>` : fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
     </tbody></table></div></details>`;
 }
 
