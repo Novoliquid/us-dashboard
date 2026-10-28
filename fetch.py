@@ -182,6 +182,19 @@ def yahoo_ohlc(symbols: list[str], period: str = OHLC_PERIOD, retries: int = 3) 
     return out
 
 
+def day_bar(d: pd.DataFrame, asof: str) -> list[float] | None:
+    """[open, high, low] of the asof session, for the one-day candle in the table.
+    The close is already carried by the row's `close` field, so it is not repeated here."""
+    try:
+        row = d.loc[pd.Timestamp(asof)]
+    except KeyError:
+        return None
+    vals = [row.Open, row.High, row.Low]
+    if any(pd.isna(v) for v in vals):
+        return None
+    return [round(float(v), 4) for v in vals]
+
+
 def slug(symbol: str) -> str:
     """File-safe symbol: ^GSPC -> _GSPC, DX-Y.NYB -> DX-Y_NYB, GC=F -> GC_F."""
     return "".join(c if c.isalnum() or c == "-" else "_" for c in symbol)
@@ -538,7 +551,9 @@ def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]
         # A one-day move this large in an S&P 500 name is a spin-off/split Yahoo has not adjusted yet
         # (Corteva -84% on its 2026-10-01 Vylor spin-off), not a real return. Flag it so it stays out of averages.
         ca = st["day"] is not None and abs(st["day"]) >= CA_PCT
+        d = ohlc.get(r["ticker"])
         rows.append({**{k: r[k] for k in ("ticker", "name", "sector")}, **st,
+                     "bar": day_bar(d, st["asof"]) if d is not None else None,
                      "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap,
                      **({"ca": True} if ca else {})})
     # market asof = most common asof date among stocks
@@ -564,6 +579,7 @@ def main() -> int:
             "m3": "same as m1 with 3 calendar months",
             "ytd": "close / last close of previous calendar year - 1 (bonds: bp)",
             "post": "after-hours price and % vs close, same session as asof; time in ET",
+            "bar": "[open, high, low] of the asof session; the close is the `close` field",
             "fg": "CNN Fear & Greed 0-100; changes in points",
         },
     }

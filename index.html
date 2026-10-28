@@ -107,11 +107,17 @@
   th, td { padding: 6px 12px; text-align: right; border-top: 1px solid var(--line-2); white-space: nowrap; }
   th { color: var(--text-3); font-weight: 500; font-size: 11px; cursor: pointer; user-select: none; }
   th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
-  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th.nos { cursor: default; }
+  th:first-child, td:first-child, th:nth-child(3), td:nth-child(3) { text-align: left; }
+  th:nth-child(2), td.cdl { text-align: center; padding: 4px 8px; width: 26px; }
   td:first-child { font-weight: 600; }
   a.t { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-3); }
   a.t:hover { color: var(--down); border-bottom-color: var(--down); }
-  td:nth-child(2) { color: var(--text-2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  td:nth-child(3) { color: var(--text-2); max-width: 260px; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+  svg.cdl { display: block; margin: 0 auto; }
+  svg.cdl line { stroke-width: 1.2; }
+  svg.cdl.u line, svg.cdl.u rect { stroke: var(--up); fill: var(--up); }
+  svg.cdl.d line, svg.cdl.d rect { stroke: var(--down); fill: var(--down); }
   td .sec { color: var(--text-3); font-size: 11px; margin-left: 6px; }
   td .chg { display: inline-block; }
   td.post .pv { color: var(--text-2); margin-right: 6px; }
@@ -120,8 +126,9 @@
   footer { color: var(--text-3); font-size: 12px; padding: 20px; border-top: 1px solid var(--line); }
   @media (max-width: 640px) {
     header, main { padding-left: 12px; padding-right: 12px; }
-    td:nth-child(2) { max-width: 120px; }
+    td:nth-child(3) { max-width: 120px; }
     th, td { padding: 6px 8px; }
+    th:nth-child(2), td.cdl { padding: 4px 6px; }
   }
 </style>
 </head>
@@ -267,9 +274,31 @@ const cmp = (a, b) => {
   if (x == null) return 1; if (y == null) return -1;
   return (typeof x === "string" ? x.localeCompare(y) : x - y) * (sortAsc ? 1 : -1);
 };
-const COLS = [["ticker","Ticker"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["ytd","YTD"],["mcap","Mkt Cap"]];
+// an empty key marks a column that carries no sortable value
+const COLS = [["ticker","Ticker"],["","일봉"],["name","Name"],["close","Close"],["day","Day"],["post_chg","After"],["m1","1M"],["m3","3M"],["ytd","YTD"],["mcap","Mkt Cap"]];
 const fmtPost = r => r.post == null ? `<span class="chg flat">–</span>` :
   `<span class="pv">${fmtNum(r.post)}</span>${fmtChg(r.post_chg)}`;
+
+// The asof session as a single candle: the wick spans high-low, the body spans open-close,
+// scaled to that row's own range. Red body = close at or above open (양봉), blue = below (음봉).
+const CDL_H = 20, CDL_PAD = 2;
+function candleSVG(r) {
+  const b = r.bar;
+  if (!b || r.close == null) return `<span class="chg flat">–</span>`;
+  const [o, h, l] = b, c = r.close;
+  if (o == null || h == null || l == null) return `<span class="chg flat">–</span>`;
+  // Yahoo sometimes prints an open outside the session high-low (MMM 2026-10-27: o 173.06 > h 172.88),
+  // so the scale spans every value we draw. Normal rows are unaffected.
+  const hi = Math.max(o, h, c), lo = Math.min(o, l, c), span = hi - lo;
+  const y = v => span > 0 ? CDL_PAD + (hi - v) / span * CDL_H : CDL_PAD + CDL_H / 2;
+  const top = Math.min(y(o), y(c)), body = Math.max(Math.abs(y(o) - y(c)), 1);  // a doji still draws a line
+  const rng = l > 0 ? `${(span / l * 100).toFixed(2)}%` : "–";
+  const tip = `시 ${fmtNum(o)} · 고 ${fmtNum(h)} · 저 ${fmtNum(l)} · 종 ${fmtNum(c)} / 일중 변동 ${rng}`;
+  return `<svg class="cdl ${c >= o ? "u" : "d"}" width="9" height="${CDL_H + CDL_PAD * 2}" viewBox="0 0 9 ${CDL_H + CDL_PAD * 2}">`
+       + `<title>${tip}</title>`
+       + `<line x1="4.5" x2="4.5" y1="${y(hi).toFixed(1)}" y2="${y(lo).toFixed(1)}"/>`
+       + `<rect x="1" y="${top.toFixed(1)}" width="7" height="${body.toFixed(1)}"/></svg>`;
+}
 
 // one accordion group: summary with equal-weight averages + sortable table. showSector tags each row with its sector.
 function groupHTML(title, rows, key, isOpen, showSector = false, cls = "sector") {
@@ -280,9 +309,9 @@ function groupHTML(title, rows, key, isOpen, showSector = false, cls = "sector")
       <span><span class="lbl">1M</span>${fmtChg(avg(rows,"m1"))}</span>
       <span><span class="lbl">3M</span>${fmtChg(avg(rows,"m3"))}</span>
       <span><span class="lbl">YTD</span>${fmtChg(avg(rows,"ytd"))}</span></summary>
-    <div class="tw"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}" class="${k===sortKey?"sorted":""} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
+    <div class="tw"><table><thead><tr>${COLS.map(([k,l]) => `<th data-k="${k}" class="${k ? (k===sortKey?"sorted":"") : "nos"} ${sortAsc?"asc":""}">${l}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r => `<tr data-t="${r.ticker.toLowerCase()} ${r.name.toLowerCase()}">
-      <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td title="${r.name}">${r.name}${showSector ? `<span class="sec">${r.sector}</span>` : ""}</td><td>${fmtNum(r.close)}</td>
+      <td><a class="t" href="stock.html?t=${r.ticker}">${r.ticker}</a></td><td class="cdl">${candleSVG(r)}</td><td title="${r.name}">${r.name}${showSector ? `<span class="sec">${r.sector}</span>` : ""}</td><td>${fmtNum(r.close)}</td>
       <td>${r.ca ? `<span class="chg flat" title="분할·합병 등 기업행위로 주가가 조정된 날입니다. 실제 등락이 아니라 평균에서 제외했습니다.">기업행위</span>` : fmtChg(r.day)}</td><td class="post">${fmtPost(r)}</td><td>${fmtChg(r.m1)}</td><td>${fmtChg(r.m3)}</td><td>${fmtChg(r.ytd)}</td><td>${fmtMcap(r.mcap)}</td></tr>`).join("")}
     </tbody></table></div></details>`;
 }
@@ -306,6 +335,7 @@ function renderAll(stocks) {
   renderSectors(stocks);
   document.querySelectorAll("th").forEach(th => th.onclick = () => {
     const k = th.dataset.k;
+    if (!k) return;  // the 일봉 column has nothing to sort on
     if (sortKey === k) sortAsc = !sortAsc; else { sortKey = k; sortAsc = (k === "ticker" || k === "name"); }
     renderAll(stocks); applyFilter();
   });
