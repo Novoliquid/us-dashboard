@@ -526,13 +526,14 @@ def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
     return out
 
 
-def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]:
+def build_stocks(prev: dict | None = None) -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame], list[str]]:
     meta = json.loads((DATA / "sp500.json").read_text())["rows"]
     tickers = [r["ticker"] for r in meta]
     ohlc = yahoo_ohlc(tickers)
     closes = {sym: d["Close"] for sym, d in ohlc.items()}
     quotes = yahoo_quotes(tickers)
-    rows, missing = [], []
+    prev_rows = {x["ticker"]: x for x in (prev or {}).get("stocks", [])}
+    rows, missing, stale = [], [], []
     for r in meta:
         s = closes.get(r["ticker"])
         st = stats(s, "px") if s is not None else None
@@ -552,20 +553,28 @@ def build_stocks() -> tuple[list[dict], list[str], str, dict[str, pd.DataFrame]]
         # (Corteva -84% on its 2026-10-01 Vylor spin-off), not a real return. Flag it so it stays out of averages.
         ca = st["day"] is not None and abs(st["day"]) >= CA_PCT
         d = ohlc.get(r["ticker"])
-        rows.append({**{k: r[k] for k in ("ticker", "name", "sector")}, **st,
-                     "bar": day_bar(d, st["asof"]) if d is not None else None,
-                     "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap,
-                     **({"ca": True} if ca else {})})
+        row = {**{k: r[k] for k in ("ticker", "name", "sector")}, **st,
+               "bar": day_bar(d, st["asof"]) if d is not None else None,
+               "post": post, "post_chg": post_chg, "post_time": post_time, "mcap": mcap,
+               **({"ca": True} if ca else {})}
+        # The market-wide asof guard in main() misses a partial regression: on 2026-11-07 11:30 KST Yahoo
+        # served the previous session's bar for 69 of 502 tickers while the rest were current, which
+        # silently flipped the sector averages. Keep the newer record per ticker.
+        old = prev_rows.get(r["ticker"])
+        if old and old.get("asof") and row["asof"] < old["asof"]:
+            stale.append(r["ticker"])
+            row = old
+        rows.append(row)
     # market asof = most common asof date among stocks
     asof = pd.Series([x["asof"] for x in rows]).mode().iloc[0] if rows else None
-    return rows, missing, asof, ohlc
+    return rows, missing, asof, ohlc, stale
 
 
 def main() -> int:
     latest = DATA / "latest.json"
     prev = json.loads(latest.read_text()) if latest.exists() else None
     macro, m_missing, m_ohlc, lines = build_macro(prev)
-    stocks, s_missing, asof, s_ohlc = build_stocks()
+    stocks, s_missing, asof, s_ohlc, s_stale = build_stocks(prev)
     updated = datetime.now(KST)
     payload = {
         "asof": asof,
@@ -595,6 +604,8 @@ def main() -> int:
         print(f"FAIL asof={asof} is older than previous {prev_asof}; keeping previous data", file=sys.stderr)
         return 2
     for sym, d in {**m_ohlc, **s_ohlc}.items():  # chart files only once the day's data is accepted
+        if sym in s_stale:  # the fetched frame ends before the record we kept; leave the chart alone
+            continue
         write_ohlc(sym, d)
     for sym, s in lines.items():
         write_line(sym, s, dec=1 if sym.startswith("FNG:") else 3)
@@ -614,7 +625,10 @@ def main() -> int:
         except Exception as e:
             print(f"{name} failed, keeping previous: {e}", file=sys.stderr)
     n_post = sum(1 for x in stocks if x["post"] is not None)
-    print(f"OK asof={asof} stocks={len(stocks)} post={n_post} missing_stocks={s_missing} updated={payload['updated_kst']}")
+    if s_stale:
+        print(f"kept previous record for {len(s_stale)} stale tickers: {s_stale}", file=sys.stderr)
+    print(f"OK asof={asof} stocks={len(stocks)} post={n_post} missing_stocks={s_missing} "
+          f"stale={len(s_stale)} updated={payload['updated_kst']}")
     return 0
 
 
