@@ -472,7 +472,7 @@ def _mcap(s) -> float:
         return 0.0
 
 
-def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series]]:
+def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFrame], dict[str, pd.Series], list[str]]:
     """prev = previous latest.json payload; the non-Yahoo feeds (JGB, FRED, Fear & Greed) fall back to it when a source is down."""
     y_syms = [s for grp in MACRO.values() for _, s, _ in grp if not s.startswith(EXTERNAL)]
     ohlc = yahoo_ohlc(y_syms)
@@ -487,7 +487,7 @@ def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFr
     lines.update(fng)
     closes.update(lines)
     prev_items = {it["symbol"]: it for grp in (prev or {}).get("macro", {}).values() for it in grp}
-    result, missing = {}, []
+    result, missing, stale = {}, [], []
     for grp, items in MACRO.items():
         result[grp] = []
         for label, sym, kind in items:
@@ -502,8 +502,15 @@ def build_macro(prev: dict | None) -> tuple[dict, list[str], dict[str, pd.DataFr
                 st = {"close": None, "day": None, "m1": None, "asof": None}
             item = {"name": label, "symbol": sym, "kind": kind, "chart": sym in closes, **st}
             item.update(fng_extra.get(sym, {}))  # rating + hist for the gauge card
+            # Same partial-regression guard as build_stocks: USD/KRW came back a day old on
+            # 2026-11-10 07:00 KST and published a -1.18% move that never happened.
+            old = prev_items.get(sym)
+            if old and old.get("asof") and item.get("asof") and item["asof"] < old["asof"]:
+                print(f"{sym}: fetched {item['asof']} is older than {old['asof']}; keeping previous", file=sys.stderr)
+                item = {**old, "name": label, "kind": kind}
+                stale.append(sym)
             result[grp].append(item)
-    return result, missing, ohlc, lines
+    return result, missing, ohlc, lines, stale
 
 
 def yahoo_quotes(symbols: list[str]) -> dict[str, dict]:
@@ -573,7 +580,7 @@ def build_stocks(prev: dict | None = None) -> tuple[list[dict], list[str], str, 
 def main() -> int:
     latest = DATA / "latest.json"
     prev = json.loads(latest.read_text()) if latest.exists() else None
-    macro, m_missing, m_ohlc, lines = build_macro(prev)
+    macro, m_missing, m_ohlc, lines, m_stale = build_macro(prev)
     stocks, s_missing, asof, s_ohlc, s_stale = build_stocks(prev)
     updated = datetime.now(KST)
     payload = {
@@ -627,8 +634,10 @@ def main() -> int:
     n_post = sum(1 for x in stocks if x["post"] is not None)
     if s_stale:
         print(f"kept previous record for {len(s_stale)} stale tickers: {s_stale}", file=sys.stderr)
+    if m_stale:
+        print(f"kept previous macro readings: {m_stale}", file=sys.stderr)
     print(f"OK asof={asof} stocks={len(stocks)} post={n_post} missing_stocks={s_missing} "
-          f"stale={len(s_stale)} updated={payload['updated_kst']}")
+          f"stale={len(s_stale)} macro_stale={len(m_stale)} updated={payload['updated_kst']}")
     return 0
 
 
