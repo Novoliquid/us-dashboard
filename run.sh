@@ -28,6 +28,12 @@ if [[ -n "$NEW" ]]; then
   uv run python fund.py ${=NEW} >>"$LOG" 2>&1 || echo "$(ts) fund backfill failed" >>"$LOG"
 fi
 
+# Snapshot the payload we are about to replace. Yahoo sometimes serves a mid-session price as the
+# close right after the US bell (seen 2026-11-19: 499/502 tickers revised between the 07:00 and
+# 11:30 runs, same asof). The stale guard in fetch.py only blocks older asof values, so a same-day
+# revision is invisible to it — count it here instead.
+cp data/latest.json /tmp/prev_latest.json 2>/dev/null || rm -f /tmp/prev_latest.json
+
 if ! uv run python fetch.py >>"$LOG" 2>&1; then
   echo "$(ts) FETCH FAILED" >>"$LOG"
   tail -5 "$LOG"
@@ -59,6 +65,19 @@ for s in d["stocks"]:
     by.setdefault(s["sector"], []).append(s["day"])
 avg = {k: sum(v)/len(v) for k, v in by.items() if v}
 best = max(avg, key=avg.get); worst = min(avg, key=avg.get)
+
+# same-asof revisions: how much of the previous run turned out to be provisional
+rev = ""
+try:
+    p = json.load(open("/tmp/prev_latest.json"))
+    if p["asof"] == d["asof"]:
+        old = {s["ticker"]: s["day"] for s in p["stocks"]}
+        n = sum(1 for s in d["stocks"] if s["ticker"] in old and s["day"] != old[s["ticker"]])
+        if n:
+            rev = f" | REVISED {n}/{len(d['stocks'])} vs {p['updated_kst']}"
+except Exception:
+    pass
+
 print(f"US {d['asof']} | Dow {f(idx['Dow Jones']['day'])} S&P {f(idx['S&P 500']['day'])} Nasdaq {f(idx['Nasdaq']['day'])} | "
-      f"best {best} {f(avg[best])} / worst {worst} {f(avg[worst])} | missing {len(d['missing']['stocks'])}")
+      f"best {best} {f(avg[best])} / worst {worst} {f(avg[worst])} | missing {len(d['missing']['stocks'])}{rev}")
 EOF
